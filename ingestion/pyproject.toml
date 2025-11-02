@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "ingestion"
+version = "1.0.0"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+beautifulsoup4 = "^4.14.2"
+boto3 = "^1.40.64"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.2"
+pytest-mock = "^3.15.1"
+pytest-cov = "^7.0.0"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "src"
+]
