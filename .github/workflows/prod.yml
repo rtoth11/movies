@@ -23,6 +23,14 @@ jobs:
           python-version: '3.11'
           cache: 'poetry'
 
+      - name: Cache Poetry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
       - name: Install dependencies
         working-directory: "./ingestion"
         run: |
@@ -76,6 +84,7 @@ jobs:
 
       - name: Set outputs
         id: set_outputs
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: "./terraform/permissions_for_hcp_terraform"
         run: |
           hcp_terraform_infrastructure_organization=$(terraform output -raw hcp_terraform_infrastructure_organization)
