@@ -1,2 +1,6 @@
 __pycache__/
 .idea
+.terraform/
+*.tfstate
+*.tfstate.*
+*.terraform.lock.hcl
