@@ -1,0 +1,13 @@
+ingestion_ecr_repo_name = "movies-ingestion-repo"
+github_repo = "rtoth11/movies"
+github_role_name = "github-actions-role"
+github_role_path = "/movies/"
+ingestion_s3_bucket_name = "movies-data-ingestion-bucket"
+ingestion_lambda_role_name = "ingestion-lambda-role"
+ingestion_lambda_role_path = "/movies/"
+ingestion_lambda_function_name = "ingestion-lambda"
+region = "us-east-1"
+ingestion_lambda_memory_size = 256
+ingestion_lambda_timeout = 900
+ingestion_event_rule_name = "ingestion-event-rule"
+ingestion_event_schedule_expression = "cron(0 12 * * ? *)"
