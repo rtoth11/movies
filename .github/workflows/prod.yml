@@ -22,6 +22,14 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Cache Poetry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
       - name: Install dependencies
         working-directory: "./ingestion"
         run: |
@@ -32,3 +40,293 @@ jobs:
         working-directory: "./ingestion"
         run: |
           poetry run pytest --cov=src --cov-report=term-missing
+
+  permissions_for_hcp_terraform:
+    runs-on: ubuntu-latest
+    name: "Permissions for HCP Terraform"
+    outputs:
+      hcp_terraform_infrastructure_organization: ${{ steps.set_outputs.outputs.hcp_terraform_infrastructure_organization }}
+      hcp_terraform_infrastructure_workspace_name: ${{ steps.set_outputs.outputs.hcp_terraform_infrastructure_workspace_name }}
+      hcp_terraform_role_arn: ${{ steps.set_outputs.outputs.hcp_terraform_role_arn }}
+    steps:
+      - name: Checkout code for next step
+        uses: actions/checkout@v4
+
+      # If local execution mode is set for the workspace
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+          mask-aws-account-id: false
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: "./terraform/permissions_for_hcp_terraform"
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: "./terraform/permissions_for_hcp_terraform"
+        run: terraform plan
+
+      - name: Terraform Apply
+        id: apply_permissions_for_hcp_terraform
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: "./terraform/permissions_for_hcp_terraform"
+        run: terraform apply -auto-approve
+
+      - name: Set outputs
+        id: set_outputs
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: "./terraform/permissions_for_hcp_terraform"
+        run: |
+          hcp_terraform_infrastructure_organization=$(terraform output -raw hcp_terraform_infrastructure_organization)
+          hcp_terraform_infrastructure_workspace_name=$(terraform output -raw hcp_terraform_infrastructure_workspace_name)
+          hcp_terraform_role_arn=$(terraform output -raw hcp_terraform_role_arn)
+
+          echo "hcp_terraform_infrastructure_organization=${hcp_terraform_infrastructure_organization}" >> $GITHUB_OUTPUT
+          echo "hcp_terraform_infrastructure_workspace_name=${hcp_terraform_infrastructure_workspace_name}" >> $GITHUB_OUTPUT
+          echo "hcp_terraform_role_arn=${hcp_terraform_role_arn}" >> $GITHUB_OUTPUT
+
+  terraform_infrastructure:
+    needs: permissions_for_hcp_terraform
+    runs-on: ubuntu-latest
+    name: "Terraform Infrastructure"
+    outputs:
+      ingestion_ecr_repository_url: ${{ steps.set_outputs.outputs.ingestion_ecr_repository_url }}
+      github_actions_role_arn: ${{ steps.set_outputs.outputs.github_actions_role_arn }}
+      ingestion_lambda_function_name: ${{ steps.set_outputs.outputs.ingestion_lambda_function_name }}
+    steps:
+      - name: Checkout code for next step
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Get infrastructure workspace ID
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          WORKSPACE_ID=$(curl \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request GET \
+            "https://app.terraform.io/api/v2/organizations/${{ needs.permissions_for_hcp_terraform.outputs.hcp_terraform_infrastructure_organization }}/workspaces/${{ needs.permissions_for_hcp_terraform.outputs.hcp_terraform_infrastructure_workspace_name }}" \
+            | jq -r '.data.id')
+          echo "WORKSPACE_ID=$WORKSPACE_ID" >> $GITHUB_ENV
+
+      - name: Check if TFC_AWS_PROVIDER_AUTH variable exists
+        id: check_variable
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          VARIABLE_ID=$(curl \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request GET \
+            "https://app.terraform.io/api/v2/workspaces/${{ env.WORKSPACE_ID }}/vars" \
+            | jq -r '.data[] | select(.attributes.key=="TFC_AWS_PROVIDER_AUTH") | .id')
+          echo "VARIABLE_ID=$VARIABLE_ID" >> $GITHUB_ENV
+
+      - name: Set TFC_AWS_PROVIDER_AUTH
+        if: >-
+          ${{ github.event_name == 'push' &&
+              github.ref == 'refs/heads/main' &&
+              (env.VARIABLE_ID || '') == '' }}
+        run: |
+          curl \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request POST \
+            --data '{
+              "data": {
+                "type":"vars",
+                "attributes": {
+                  "key":"TFC_AWS_PROVIDER_AUTH",
+                  "value":"true",
+                  "category":"env",
+                  "hcl":false,
+                  "sensitive":false
+                },
+                "relationships": {
+                  "workspace": {
+                    "data": {
+                      "type": "workspaces",
+                      "id": "'"${{ env.WORKSPACE_ID }}"'"
+                    }
+                  }
+                }
+              }
+            }' \
+            https://app.terraform.io/api/v2/vars
+
+      - name: Update TFC_AWS_PROVIDER_AUTH
+        if: >-
+          ${{ github.event_name == 'push' &&
+              github.ref == 'refs/heads/main' &&
+              (env.VARIABLE_ID || '') != '' }}
+        run: |
+          curl \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request PATCH \
+            --data '{
+              "data": {
+                "type":"vars",
+                "id":"'"${{ env.VARIABLE_ID }}"'",
+                "attributes": {
+                  "key":"TFC_AWS_PROVIDER_AUTH",
+                  "value":"true",
+                  "category":"env",
+                  "hcl":false,
+                  "sensitive":false
+                }
+              }
+            }' \
+            https://app.terraform.io/api/v2/vars/"${{ env.VARIABLE_ID }}"
+
+      - name: Check if TFC_AWS_RUN_ROLE_ARN variable exists
+        id: check_variable_run_role
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          VARIABLE_ID_RUN_ROLE=$(curl \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request GET \
+            "https://app.terraform.io/api/v2/workspaces/${{ env.WORKSPACE_ID }}/vars" \
+            | jq -r '.data[] | select(.attributes.key=="TFC_AWS_RUN_ROLE_ARN") | .id')
+          echo "VARIABLE_ID_RUN_ROLE=$VARIABLE_ID_RUN_ROLE" >> $GITHUB_ENV
+
+      - name: Set TFC_AWS_RUN_ROLE_ARN
+        if: >-
+          ${{ github.event_name == 'push' &&
+              github.ref == 'refs/heads/main' &&
+              (env.VARIABLE_ID_RUN_ROLE || '') == '' }}
+        run: |
+          curl \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request POST \
+            --data '{
+              "data": {
+                "type":"vars",
+                "attributes": {
+                  "key":"TFC_AWS_RUN_ROLE_ARN",
+                  "value":"'"${{ needs.permissions_for_hcp_terraform.outputs.hcp_terraform_role_arn }}"'",
+                  "category":"env",
+                  "hcl":false,
+                  "sensitive":false
+                },
+                "relationships": {
+                  "workspace": {
+                    "data": {
+                      "type": "workspaces",
+                      "id": "'"${{ env.WORKSPACE_ID }}"'"
+                    }
+                  }
+                }
+              }
+            }' \
+            https://app.terraform.io/api/v2/vars
+
+      - name: Update TFC_AWS_RUN_ROLE_ARN
+        if: >-
+          ${{ github.event_name == 'push' &&
+              github.ref == 'refs/heads/main' &&
+              (env.VARIABLE_ID_RUN_ROLE || '') != '' }}
+        run: |
+          curl \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request PATCH \
+            --data '{
+              "data": {
+                "type":"vars",
+                "id":"'"${{ env.VARIABLE_ID_RUN_ROLE }}"'",
+                "attributes": {
+                  "key":"TFC_AWS_RUN_ROLE_ARN",
+                  "value":"'"${{ needs.permissions_for_hcp_terraform.outputs.hcp_terraform_role_arn }}"'",
+                  "category":"env",
+                  "hcl":false,
+                  "sensitive":false
+                }
+              }
+            }' \
+            https://app.terraform.io/api/v2/vars/"${{ env.VARIABLE_ID_RUN_ROLE }}"
+
+      - name: Terraform Init
+        working-directory: "./terraform/infrastructure"
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: "./terraform/infrastructure"
+        run: terraform plan
+
+      - name: Terraform Apply
+        id: apply_infrastructure
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: "./terraform/infrastructure"
+        run: terraform apply -auto-approve
+
+      - name: Set outputs
+        id: set_outputs
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: "./terraform/infrastructure"
+        run: |
+          echo "ingestion_ecr_repository_url=$(terraform output -raw ingestion_ecr_repository_url)" >> $GITHUB_OUTPUT
+          echo "github_actions_role_arn=$(terraform output -raw github_actions_role_arn)" >> $GITHUB_OUTPUT
+          echo "ingestion_lambda_function_name=$(terraform output -raw ingestion_lambda_function_name)" >> $GITHUB_OUTPUT
+
+  build:
+    needs: terraform_infrastructure
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code for next step
+        uses: actions/checkout@v4
+
+      - name: Read version from file
+        id: get_version
+        run: echo "VERSION=$(cat ingestion/VERSION)" >> $GITHUB_ENV
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ needs.terraform_infrastructure.outputs.github_actions_role_arn }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tags
+        id: set_tags
+        run: |
+          TAGS="${{ needs.terraform_infrastructure.outputs.ingestion_ecr_repository_url }}:${VERSION}"
+          TAGS="$TAGS,${{ needs.terraform_infrastructure.outputs.ingestion_ecr_repository_url }}:latest"
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./ingestion
+          file: ./ingestion/Dockerfile
+          push: true
+          tags: ${{ steps.set_tags.outputs.tags }}
+          provenance: false
+          platforms: linux/arm64
+
+      - name: Update Lambda function
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }} \
+            --image-uri ${{ needs.terraform_infrastructure.outputs.ingestion_ecr_repository_url }}:latest
