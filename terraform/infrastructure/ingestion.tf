@@ -93,6 +93,11 @@ resource "aws_cloudwatch_event_target" "ingestion_lambda_target" {
   rule      = aws_cloudwatch_event_rule.run_data_ingestion_event_rule.name
   target_id = var.ingestion_lambda_function_name
   arn       = aws_lambda_function.ingestion_lambda.arn
+
+  retry_policy {
+    maximum_retry_attempts = 0
+    maximum_event_age_in_seconds = 900
+  }
 }
 
 resource "aws_lambda_permission" "allow_cloudwatch" {
