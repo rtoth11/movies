@@ -169,7 +169,12 @@ data "aws_iam_policy_document" "terraform_policy_document" {
       "lambda:GetPolicy",
       "lambda:ListVersionsByFunction",
       "lambda:RemovePermission",
-      "lambda:UpdateFunctionCode"
+      "lambda:UpdateFunctionCode",
+      "lambda:GetFunctionEventInvokeConfig",
+      "lambda:PutFunctionEventInvokeConfig",
+      "lambda:ListFunctionEventInvokeConfig",
+      "lambda:DeleteFunctionEventInvokeConfig",
+      "lambda:UpdateFunctionEventInvokeConfig"
     ]
 
     resources = [

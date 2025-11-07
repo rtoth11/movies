@@ -83,6 +83,12 @@ resource "aws_lambda_function" "ingestion_lambda" {
   architectures = ["arm64"]
 }
 
+resource "aws_lambda_function_event_invoke_config" "ingestion_lambda_event_config" {
+  function_name                = aws_lambda_function.ingestion_lambda.function_name
+  maximum_event_age_in_seconds = 900
+  maximum_retry_attempts       = 0
+}
+
 resource "aws_cloudwatch_event_rule" "run_data_ingestion_event_rule" {
   name        = var.ingestion_event_rule_name
   description = "Run data ingestion code on a defined schedule"
