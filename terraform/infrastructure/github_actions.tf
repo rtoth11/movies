@@ -75,12 +75,14 @@ resource "aws_iam_role_policy_attachment" "attach_ecr_to_github_role" {
   policy_arn = aws_iam_policy.ecr_policy.arn
 }
 
-data "aws_iam_policy_document" "lambda_update_function_code_policy_document" {
+data "aws_iam_policy_document" "lambda_update_function_policy_document" {
   statement {
     effect = "Allow"
 
     actions = [
-      "lambda:UpdateFunctionCode"
+      "lambda:UpdateFunctionCode",
+      "lambda:UpdateFunctionConfiguration",
+      "lambda:GetFunctionConfiguration"
     ]
     resources = [
       aws_lambda_function.ingestion_lambda.arn
@@ -88,12 +90,12 @@ data "aws_iam_policy_document" "lambda_update_function_code_policy_document" {
   }
 }
 
-resource "aws_iam_policy" "lambda_update_function_code_policy" {
-  name   = "lambda-update-function-code-policy"
-  policy = data.aws_iam_policy_document.lambda_update_function_code_policy_document.json
+resource "aws_iam_policy" "lambda_update_function_policy" {
+  name   = "lambda-update-function-policy"
+  policy = data.aws_iam_policy_document.lambda_update_function_policy_document.json
 }
 
-resource "aws_iam_role_policy_attachment" "attach_lambda_update_function_code_to_github_role" {
+resource "aws_iam_role_policy_attachment" "attach_lambda_update_function_to_github_role" {
   role       = aws_iam_role.github_actions_role.name
-  policy_arn = aws_iam_policy.lambda_update_function_code_policy.arn
+  policy_arn = aws_iam_policy.lambda_update_function_policy.arn
 }

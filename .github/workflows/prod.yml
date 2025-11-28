@@ -324,9 +324,26 @@ jobs:
           tags: ${{ steps.set_tags.outputs.tags }}
           provenance: false
           platforms: linux/arm64
+          build-args: |
+            DATABRICKS_MOVIE_DATA_VOLUME_PATH=${{ vars.DATABRICKS_MOVIE_DATA_VOLUME_PATH }}
 
       - name: Update Lambda function
         run: |
           aws lambda update-function-code \
             --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }} \
             --image-uri ${{ needs.terraform_infrastructure.outputs.ingestion_ecr_repository_url }}:latest
+
+      - name: Wait for Lambda code update to finish
+        run: |
+          aws lambda wait function-updated \
+            --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }}
+
+      - name: Update Lambda function environment variables
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          aws lambda update-function-configuration \
+            --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }} \
+            --environment "Variables={TMDB_API_KEY=$TMDB_API_KEY,DATABRICKS_HOST=$DATABRICKS_HOST,DATABRICKS_TOKEN=$DATABRICKS_TOKEN}"

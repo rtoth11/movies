@@ -1,0 +1,10 @@
+json_data = {
+    'operationName': 'GetScripts',
+    'variables': {
+        'relationId': 5222,
+        'offset': 0,
+        'limit': 1501,
+        'orderBy': 'year DESC, postDate DESC',
+    },
+    'query': 'query GetScripts($search: String, $relationId: [QueryArgument] = null, $offset: Int, $limit: Int, $type: [String], $orderBy: String) {\n  scriptsEntries(\n    comingSoon: false\n    search: $search\n    relatedTo: $relationId\n    type: $type\n    offset: $offset\n    limit: $limit\n    orderBy: $orderBy\n  ) {\n    ... on filmScript_Entry {\n      title\n      uri\n      poster {\n        url\n        x: imagerTransform(transform: "posterMd") {\n          url\n          width\n          height\n          mimeType\n          __typename\n        }\n        __typename\n      }\n      scriptTitle\n      year\n      dateUpdated @formatDateTime(format: "YmdHis")\n      typeHandle\n      __typename\n    }\n    ... on seriesScript_Entry {\n      title\n      uri\n      poster {\n        url\n        x: imagerTransform(transform: "posterMd") {\n          url\n          width\n          height\n          mimeType\n          __typename\n        }\n        __typename\n      }\n      seriesTitle {\n        ... on series_Entry {\n          seriesTitle\n          __typename\n        }\n        __typename\n      }\n      year\n      episodeTitle\n      seasonNumber\n      episodeNumber\n      dateUpdated @formatDateTime(format: "YmdHis")\n      typeHandle\n      __typename\n    }\n    ... on podcastScript_Entry {\n      title\n      uri\n      poster {\n        url\n        x: imagerTransform(transform: "posterMd") {\n          url\n          width\n          height\n          mimeType\n          __typename\n        }\n        __typename\n      }\n      seriesTitle {\n        ... on series_Entry {\n          seriesTitle\n          __typename\n        }\n        __typename\n      }\n      year\n      episodeTitle\n      seasonNumber\n      episodeNumber\n      dateUpdated @formatDateTime(format: "YmdHis")\n      typeHandle\n      __typename\n    }\n    __typename\n  }\n}',
+}
