@@ -332,6 +332,9 @@ jobs:
           aws lambda update-function-code \
             --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }} \
             --image-uri ${{ needs.terraform_infrastructure.outputs.ingestion_ecr_repository_url }}:latest
-            --environment "Variables={TMDB_API_KEY=${{ secrets.TMDB_API_KEY }}}"
-            --environment "Variables={DATABRICKS_HOST=${{ secrets.DATABRICKS_HOST }}}"
-            --environment "Variables={DATABRICKS_TOKEN=${{ secrets.DATABRICKS_TOKEN }}}"
+
+      - name: Update Lambda function environment variables
+        run: |
+          aws lambda update-function-configuration \
+            --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }} \
+            --environment "Variables={TMDB_API_KEY=${{ secrets.TMDB_API_KEY }},DATABRICKS_HOST=${{ secrets.DATABRICKS_HOST }},DATABRICKS_TOKEN=${{ secrets.DATABRICKS_TOKEN }}}"
