@@ -59,7 +59,6 @@ def _add_movie_data(movie_title: str, movie_year: str, script_data: list[dict]) 
 
 
 def _process_dialogue_lines(lines: list[str]) -> tuple[list[str], str, list[list[str]], list[str]]:
-    # Remaining lines may contain dialogue OR parenthetical
     dialogue_text = []
     parenthetical = ""
 
@@ -72,36 +71,37 @@ def _process_dialogue_lines(lines: list[str]) -> tuple[list[str], str, list[list
     in_parenthetical = False
     parenthetical_lines = []
 
-    for i, line in enumerate(lines):
+    for line in lines:
         stripped_line = line.strip()
 
-        # Start of parenthetical
+        # Start a parenthetical
         if not in_parenthetical and stripped_line.startswith("("):
-            if len(dialogue_text) > 0:
+            if dialogue_text:
                 extra_dialogue_texts.append(dialogue_text)
                 extra_parentheticals.append(parenthetical)
                 dialogue_text = []
-            in_parenthetical = True
-            parenthetical_lines.append(stripped_line.lstrip("("))
 
-            # Check if parenthetical ends on same line
+            in_parenthetical = True
+            parenthetical_lines = [stripped_line.lstrip("(").rstrip(")")]
+
             if stripped_line.endswith(")"):
-                parenthetical_lines[-1] = parenthetical_lines[-1].rstrip(")")
-                parenthetical = ", ".join(parenthetical_lines)
                 in_parenthetical = False
+                current = " ".join(parenthetical_lines)
+                parenthetical = f"{parenthetical}; {current}" if parenthetical else current
             continue
 
         # Inside multi-line parenthetical
         if in_parenthetical:
+            cleaned = stripped_line.rstrip(")")
+            parenthetical_lines.append(cleaned)
+
             if stripped_line.endswith(")"):
-                parenthetical_lines.append(stripped_line.rstrip(")"))
-                parenthetical = ", ".join(parenthetical_lines)
                 in_parenthetical = False
-            else:
-                parenthetical_lines.append(stripped_line)
+                current = " ".join(parenthetical_lines)
+                parenthetical = f"{parenthetical}; {current}" if parenthetical else current
             continue
 
-        # Normal dialogue line
+        # Normal dialogue
         if stripped_line:
             dialogue_text.append(stripped_line)
 

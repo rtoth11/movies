@@ -1,15 +1,15 @@
 import logging
 import re
 import requests
+from typing import Optional
 
 
-def write_file(path: str, content: str):
-    with open(path, "w") as f:
-        f.write(content)
-
-
-def download_pdf(pdf_link: str, download_path: str) -> str:
+def download_pdf(pdf_link: str, download_path: str) -> Optional[str]:
     with requests.get(pdf_link) as response:
+        if response.status_code != 200:
+            logging.warning(f"Failed to download PDF from {pdf_link}: "
+                            f"Status code {response.status_code}.")
+            return None
         with open(download_path, "wb") as f:
             f.write(response.content)
     return download_path
