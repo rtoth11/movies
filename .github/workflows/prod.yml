@@ -333,6 +333,11 @@ jobs:
             --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }} \
             --image-uri ${{ needs.terraform_infrastructure.outputs.ingestion_ecr_repository_url }}:latest
 
+      - name: Wait for Lambda code update to finish
+        run: |
+          aws lambda wait function-updated \
+            --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }}
+
       - name: Update Lambda function environment variables
         run: |
           aws lambda update-function-configuration \
