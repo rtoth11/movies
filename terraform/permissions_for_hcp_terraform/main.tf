@@ -175,7 +175,8 @@ data "aws_iam_policy_document" "terraform_policy_document" {
       "lambda:PutFunctionEventInvokeConfig",
       "lambda:ListFunctionEventInvokeConfig",
       "lambda:DeleteFunctionEventInvokeConfig",
-      "lambda:UpdateFunctionEventInvokeConfig"
+      "lambda:UpdateFunctionEventInvokeConfig",
+      "lambda:UpdateFunctionConfiguration"
     ]
 
     resources = [
