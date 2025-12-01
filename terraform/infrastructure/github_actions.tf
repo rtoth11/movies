@@ -81,7 +81,8 @@ data "aws_iam_policy_document" "lambda_update_function_policy_document" {
 
     actions = [
       "lambda:UpdateFunctionCode",
-      "lambda:UpdateFunctionConfiguration"
+      "lambda:UpdateFunctionConfiguration",
+      "lambda:GetFunctionConfiguration"
     ]
     resources = [
       aws_lambda_function.ingestion_lambda.arn
