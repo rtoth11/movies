@@ -13,4 +13,4 @@ RUN poetry install --no-root --without dev
 
 COPY src/ ${LAMBDA_TASK_ROOT}/
 
-CMD ["extract_scripts.handler"]
+CMD ["extract_movie_data.handler"]
