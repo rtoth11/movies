@@ -11,8 +11,7 @@ from extract_movie_data import (
     tmdb_search,
     checked_script_pages,
     SCRIPT_PDF_PATH,
-    VOLUME_FILE_PATH,
-    headers
+    VOLUME_FILE_PATH
 )
 import extract_movie_data
 
@@ -375,7 +374,6 @@ def test__extract_script_from_pdf(mocker):
 
 
 def test__extract_script_links(mocker):
-    headers["referer"] = ""
     # mock GraphQL response
     mock_post = mocker.patch("extract_movie_data.requests.post")
     mock_post.return_value.json.return_value = {
@@ -413,7 +411,6 @@ def test__extract_script_links(mocker):
 
 
 def test__extract_script_links_same_page(mocker):
-    headers["referer"] = ""
     # mock GraphQL response
     mock_post = mocker.patch("extract_movie_data.requests.post")
     mock_post.return_value.json.return_value = {
@@ -451,7 +448,6 @@ def test__extract_script_links_same_page(mocker):
 
 
 def test__extract_script_links_no_pdf_link(mocker):
-    headers["referer"] = ""
     # mock GraphQL response
     mock_post = mocker.patch("extract_movie_data.requests.post")
     mock_post.return_value.json.return_value = {
