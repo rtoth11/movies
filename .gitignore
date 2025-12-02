@@ -4,4 +4,3 @@ __pycache__/
 *.tfstate
 *.tfstate.*
 *.terraform.lock.hcl
-ingestion/src/get_scripts_request.py

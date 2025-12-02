@@ -11,7 +11,7 @@ from databricks.sdk import WorkspaceClient
 import pymupdf
 import tmdbsimple as tmdb
 
-from get_scripts_request import cookies, headers, json_data
+from get_scripts_request import json_data
 from script_verification import write_blocks_to_txt
 import utils
 
@@ -19,6 +19,7 @@ GENRES = ["action", "adventure"]
 
 SCRIPTS_WEBSITE = "https://www.scriptslug.com"
 SCRIPTS_API_LINK = "https://www.scriptslug.com/gql"
+REFERER = "https://www.scriptslug.com/scripts/genre/{genre}?pg=50"
 
 VOLUME_FILE_PATH = f"{os.getenv('DATABRICKS_MOVIE_DATA_VOLUME_PATH')}/{{genre}}_movies.json"
 SCRIPT_PDF_PATH = os.path.join("/tmp", "{movie}.pdf")
@@ -256,11 +257,17 @@ def _extract_script_links(genre: str) -> list[tuple]:
 
     script_links = []
 
-    headers["referer"] = headers["referer"].format(genre=genre)
-    response = requests.post(SCRIPTS_API_LINK,
-                             cookies=cookies,
-                             headers=headers,
-                             json=json_data)
+    response = requests.post(
+        SCRIPTS_API_LINK,
+        headers={
+            "accept": "*/*",
+            "content-type": "application/json",
+            "user-agent": "Mozilla/5.0",
+            "origin": SCRIPTS_WEBSITE,
+            "referer": REFERER.format(genre=genre)
+        },
+        json=json_data
+    )
     script_page_links = [f"{SCRIPTS_WEBSITE}/{entry['uri']}"
                          for entry in response.json()["data"]["scriptsEntries"]]
 
