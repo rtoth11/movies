@@ -4,7 +4,7 @@ GitHub secrets required:
 - TF_API_TOKEN: needed to authenticate with HCP Terraform
 - TMDB_API_KEY: needed to authenticate with TMDB
 - DATABRICKS_HOST: needed to upload files to Databricks
-- DATABRICKS_TOKEN: needed to authenticate with Databricks
+- DATABRICKS_TOKEN: needed to authenticate with Databricks (free edition doesn't have OIDC option)
 
 GitHub variables required:
 - DATABRICKS_MOVIE_DATA_VOLUME_PATH: where to upload files in Databricks

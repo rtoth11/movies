@@ -1,0 +1,21 @@
+name: 'movies_project'
+version: '1.0.0'
+config-version: 2
+
+profile: 'movies_project'
+
+model-paths: ["src/models"]
+analysis-paths: ["src/analyses"]
+test-paths: ["src/tests"]
+seed-paths: ["src/seeds"]
+macro-paths: ["src/macros"]
+snapshot-paths: ["src/snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  movies_project:
+    movie:
+      +materialized: incremental

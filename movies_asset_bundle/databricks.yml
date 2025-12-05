@@ -1,0 +1,32 @@
+bundle:
+  name: movies_asset_bundle
+  uuid: b146d33f-08c9-4431-8c90-3cc30432e706
+
+artifacts:
+  python_artifact:
+    type: whl
+    build: uv build --wheel
+
+include:
+  - resources/*.yml
+  - resources/*/*.yml
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://dbc-dee61230-4175.cloud.databricks.com
+
+  prod:
+    mode: production
+    workspace:
+      host: https://dbc-dee61230-4175.cloud.databricks.com
+      root_path: /Workspace/Users/ricsi045@gmail.com/.bundle/${bundle.name}/${bundle.target}
+    permissions:
+      - user_name: ricsi045@gmail.com
+        level: CAN_MANAGE
+
+variables:
+  movie_data_volume_path:
+    description: "Path to the movie data volume"
