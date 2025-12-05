@@ -1,0 +1,25 @@
+movies_project:
+  target: dev
+
+  outputs:
+    dev:
+      type: databricks
+      method: http
+      catalog: movies
+      schema: "{{ var('dev_schema') }}"
+
+      http_path: /sql/1.0/warehouses/d050fd97b5b14e8e
+
+      host: "{{ env_var('DBT_HOST') }}"
+      token: "{{ env_var('DBT_ACCESS_TOKEN') }}"
+
+    prod:
+      type: databricks
+      method: http
+      catalog: movies
+      schema: default
+
+      http_path: /sql/1.0/warehouses/d050fd97b5b14e8e
+
+      host: "{{ env_var('DBT_HOST') }}"
+      token: "{{ env_var('DBT_ACCESS_TOKEN') }}"

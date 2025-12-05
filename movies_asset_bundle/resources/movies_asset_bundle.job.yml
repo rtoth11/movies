@@ -1,0 +1,38 @@
+resources:
+  jobs:
+    movies_asset_bundle_job:
+      name: movies_asset_bundle_job
+
+      trigger:
+        periodic:
+          interval: 1
+          unit: DAYS
+
+      tasks:
+        - task_key: main_task
+          environment_key: default
+          python_wheel_task:
+            package_name: movies_asset_bundle
+            entry_point: main
+            parameters:
+              - --movie-data-volume-path
+              - ${var.movie_data_volume_path}
+
+        - task_key: dbt
+          depends_on:
+            - task_key: main_task
+          environment_key: default
+          dbt_task:
+            project_directory: ../dbt
+            profiles_directory: dbt_profiles/
+            commands:
+              - 'dbt run --target=${bundle.target} --vars "{ dev_schema: models }"'
+
+      environments:
+        - environment_key: default
+
+          spec:
+            client: "2"
+            dependencies:
+              - ../dist/*.whl
+              - -r ../requirements-dev.txt
