@@ -1,17 +1,43 @@
-name: prod-ci
+name: ci-cd
 
 on:
   pull_request:
     branches: [ "main" ]
+    paths:
+      - "ingestion/**"
+      - "terraform/**"
   push:
     branches: [ "main" ]
+    paths:
+      - "ingestion/**"
+      - "terraform/**"
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
+  detect_changes:
+    runs-on: ubuntu-latest
+    outputs:
+      ingestion: ${{ steps.filter.outputs.ingestion }}
+      terraform: ${{ steps.filter.outputs.terraform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            ingestion:
+              - 'ingestion/**'
+            terraform:
+              - 'terraform/**'
+
   run_tests:
+    needs: detect_changes
+    if: needs.detect_changes.outputs.ingestion == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code for next step
@@ -42,6 +68,8 @@ jobs:
           poetry run pytest --cov=src --cov-report=term-missing
 
   permissions_for_hcp_terraform:
+    needs: detect_changes
+    if: needs.detect_changes.outputs.terraform == 'true'
     runs-on: ubuntu-latest
     name: "Permissions for HCP Terraform"
     outputs:
@@ -95,7 +123,8 @@ jobs:
           echo "hcp_terraform_role_arn=${hcp_terraform_role_arn}" >> $GITHUB_OUTPUT
 
   terraform_infrastructure:
-    needs: permissions_for_hcp_terraform
+    needs: [ detect_changes, permissions_for_hcp_terraform ]
+    if: needs.detect_changes.outputs.terraform == 'true'
     runs-on: ubuntu-latest
     name: "Terraform Infrastructure"
     outputs:
@@ -284,9 +313,12 @@ jobs:
           echo "ingestion_lambda_function_name=$(terraform output -raw ingestion_lambda_function_name)" >> $GITHUB_OUTPUT
 
   build:
-    needs: terraform_infrastructure
+    needs: [ detect_changes, terraform_infrastructure ]
+    if: >
+      needs.detect_changes.outputs.ingestion == 'true' &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout code for next step
         uses: actions/checkout@v4
