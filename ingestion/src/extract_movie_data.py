@@ -322,11 +322,16 @@ def _extract_and_store_movie_data(genre: str, workspace_client: WorkspaceClient)
         if movie_data != {}:
             all_movies.append(movie_data)
 
+    logging.info("Uploading extracted movie data to Databricks workspace.")
+
     json_bytes = json.dumps(all_movies, indent=2).encode("utf-8")
     binary_stream = io.BytesIO(json_bytes)
     workspace_client.files.upload(VOLUME_FILE_PATH.format(genre=genre),
                                   binary_stream,
                                   overwrite=True)
+
+    logging.info("Movie data upload complete.")
+
 
 def handler(event, context):
     logging.getLogger().setLevel(logging.INFO)
