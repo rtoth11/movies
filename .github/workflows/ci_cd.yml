@@ -27,6 +27,7 @@ jobs:
     outputs:
       ingestion: ${{ steps.filter.outputs.ingestion }}
       terraform: ${{ steps.filter.outputs.terraform }}
+      movies_asset_bundle: ${{ steps.filter.outputs.movies_asset_bundle }}
     steps:
       - uses: actions/checkout@v4
 
