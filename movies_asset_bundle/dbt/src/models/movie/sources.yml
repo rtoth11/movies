@@ -1,0 +1,6 @@
+sources:
+  - name: bronze
+    catalog: movies
+    schema: bronze
+    tables:
+      - name: bronze_json_movies
