@@ -391,7 +391,9 @@ jobs:
   deploy_asset_bundle:
     needs: detect_changes
     if: >
-      needs.detect_changes.outputs.movies_asset_bundle == 'true'
+      needs.detect_changes.outputs.movies_asset_bundle == 'true' &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code for next step
