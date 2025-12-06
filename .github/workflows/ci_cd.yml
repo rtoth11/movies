@@ -20,6 +20,8 @@ permissions:
 
 jobs:
   detect_changes:
+    permissions:
+      pull-requests: read
     runs-on: ubuntu-latest
     outputs:
       ingestion: ${{ steps.filter.outputs.ingestion }}
