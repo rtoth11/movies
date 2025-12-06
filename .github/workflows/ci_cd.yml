@@ -6,11 +6,13 @@ on:
     paths:
       - "ingestion/**"
       - "terraform/**"
+      - "movies_asset_bundle/**"
   push:
     branches: [ "main" ]
     paths:
       - "ingestion/**"
       - "terraform/**"
+      - "movies_asset_bundle/**"
 
 permissions:
   id-token: write
@@ -34,6 +36,8 @@ jobs:
               - 'ingestion/**'
             terraform:
               - 'terraform/**'
+            movies_asset_bundle:
+              - 'movies_asset_bundle/**'
 
   run_tests:
     needs: detect_changes
@@ -379,3 +383,23 @@ jobs:
           aws lambda update-function-configuration \
             --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }} \
             --environment "Variables={TMDB_API_KEY=$TMDB_API_KEY,DATABRICKS_HOST=$DATABRICKS_HOST,DATABRICKS_TOKEN=$DATABRICKS_TOKEN}"
+
+  deploy_asset_bundle:
+    needs: detect_changes
+    if: >
+      needs.detect_changes.outputs.movies_asset_bundle == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code for next step
+        uses: actions/checkout@v4
+
+      - name: Set up Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Deploy movies asset bundle
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        working-directory: "./movies_asset_bundle"
+        run: |
+          databricks bundle deploy -t prod --var movie_data_volume_path="${{ vars.DATABRICKS_MOVIE_DATA_VOLUME_PATH }}"
