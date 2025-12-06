@@ -21,6 +21,7 @@ permissions:
 jobs:
   detect_changes:
     permissions:
+      contents: read
       pull-requests: read
     runs-on: ubuntu-latest
     outputs:
