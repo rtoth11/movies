@@ -1,7 +1,10 @@
 import logging
+import os
 import re
 import requests
 from typing import Optional
+
+import psycopg2
 
 
 def download_pdf(pdf_link: str, download_path: str) -> Optional[str]:
@@ -96,3 +99,21 @@ def create_character_actor_map(script_data: list[dict], cast: list[dict]) -> lis
             result.append(character_and_actor)
 
     return result
+
+
+def get_already_stored_movies() -> set[int]:
+    pg_conn = psycopg2.connect(
+        host=os.getenv("PG_HOST"),
+        port=int(os.getenv("PG_PORT")),
+        dbname=os.getenv("PG_DATABASE"),
+        user=os.getenv("PG_USER"),
+        password=os.getenv("PG_PASSWORD")
+    )
+
+    try:
+        with pg_conn.cursor() as cursor:
+            cursor.execute("SELECT tmdb_id FROM models.silver_movies;")
+            rows = cursor.fetchall()
+            return {row[0] for row in rows}
+    finally:
+        pg_conn.close()

@@ -38,15 +38,6 @@ def _add_movie_data(movie_title: str, movie_year: str, script_data: list[dict]) 
     response = tmdb_search.movie(query=movie_title, year=movie_year)
     candidate_movies = [movie for movie in response["results"] if movie["title"] == movie_title]
 
-    if len(candidate_movies) == 0:
-        logging.warning(
-            f"The {movie_title} ({movie_year}) movie was not found. Skipping it.")
-        return {}
-    if len(candidate_movies) > 1:
-        logging.warning(
-            f"Multiple results for the {movie_title} ({movie_year}) movie. Skipping it.")
-        return {}
-
     movie = tmdb.Movies(candidate_movies[0]["id"])
     cast = movie.credits()["cast"]
 
@@ -252,6 +243,29 @@ def _extract_script_from_pdf(pdf_path: str) -> list[dict]:
     return blocks
 
 
+def _should_process_movie(movie_title: str, movie_year: str, already_stored_movie_ids: set[int]) \
+        -> bool:
+    response = tmdb_search.movie(query=movie_title, year=movie_year)
+    candidate_movies = [movie for movie in response["results"] if movie["title"] == movie_title]
+
+    if len(candidate_movies) == 0:
+        logging.warning(
+            f"The {movie_title} ({movie_year}) movie was not found. Skipping it.")
+        return False
+
+    if len(candidate_movies) > 1:
+        logging.warning(
+            f"Multiple candidates for the {movie_title} ({movie_year}) movie. Skipping it.")
+        return False
+
+    if candidate_movies[0]["id"] in already_stored_movie_ids:
+        logging.debug(
+            f"The {movie_title} ({movie_year}) movie is already stored. Skipping it.")
+        return False
+
+    return True
+
+
 def _extract_script_links(genre: str) -> list[tuple]:
     logging.info("Extracting script links.")
 
@@ -302,7 +316,9 @@ def _extract_script_links(genre: str) -> list[tuple]:
     return script_links
 
 
-def _extract_and_store_movie_data(genre: str, workspace_client: WorkspaceClient):
+def _extract_and_store_movie_data(genre: str,
+                                  workspace_client: WorkspaceClient,
+                                  already_stored_movie_ids: set):
     all_movies = []
 
     logging.info(f"Extracting movie data for genre '{genre}'.")
@@ -312,6 +328,9 @@ def _extract_and_store_movie_data(genre: str, workspace_client: WorkspaceClient)
     logging.info(f"Found {len(script_links)} scripts for genre '{genre}'.")
 
     for movie_title, movie_year, script_link in script_links:
+        if not _should_process_movie(movie_title, movie_year, already_stored_movie_ids):
+            continue
+
         logging.debug(f"Extracting script from {script_link}.")
 
         download_path = SCRIPT_PDF_PATH.format(movie=script_link.split(".pdf")[0].split("/")[-1])
@@ -321,6 +340,10 @@ def _extract_and_store_movie_data(genre: str, workspace_client: WorkspaceClient)
         movie_data = _add_movie_data(movie_title, movie_year, script_data)
         if movie_data != {}:
             all_movies.append(movie_data)
+
+    if len(all_movies) == 0:
+        logging.info(f"No new movie data extracted for genre '{genre}'.")
+        return
 
     logging.info("Uploading extracted movie data to Databricks workspace.")
 
@@ -334,15 +357,20 @@ def _extract_and_store_movie_data(genre: str, workspace_client: WorkspaceClient)
 
 
 def handler(event, context):
-    logging.getLogger().setLevel(logging.INFO)
+    logging.getLogger().setLevel(logging.DEBUG)
+
     databricks_host = os.getenv("DATABRICKS_HOST")
     databricks_token = os.getenv("DATABRICKS_TOKEN")
+
     if databricks_host is not None:
         workspace_client = WorkspaceClient(host=databricks_host, token=databricks_token)
     else:
         workspace_client = WorkspaceClient()
+
+    already_stored_movie_ids = utils.get_already_stored_movies()
+
     for genre in GENRES:
-        _extract_and_store_movie_data(genre, workspace_client)
+        _extract_and_store_movie_data(genre, workspace_client, already_stored_movie_ids)
 
 
 if __name__ == "__main__":
