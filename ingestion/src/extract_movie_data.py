@@ -249,12 +249,12 @@ def _should_process_movie(movie_title: str, movie_year: str, already_stored_movi
     candidate_movies = [movie for movie in response["results"] if movie["title"] == movie_title]
 
     if len(candidate_movies) == 0:
-        logging.warning(
+        logging.debug(
             f"The {movie_title} ({movie_year}) movie was not found. Skipping it.")
         return False
 
     if len(candidate_movies) > 1:
-        logging.warning(
+        logging.debug(
             f"Multiple candidates for the {movie_title} ({movie_year}) movie. Skipping it.")
         return False
 
