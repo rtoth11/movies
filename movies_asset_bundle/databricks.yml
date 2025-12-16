@@ -34,10 +34,12 @@ variables:
     description: "The secret scope to use for retrieving sensitive information"
   s3_bucket_name:
     description: "The S3 bucket to upload CSV files to when moving data to postgres"
-  schema_name:
-    description: "The schema to use when building the movie dbt models"
-  bronze_schema_name:
-    description: "The schema where the bronze tables are located"
   catalog_name:
     description: "The catalog to use when building the movie dbt models"
     default: "movies"
+  schema_name:
+    description: "The schema to use when building the movie dbt models"
+    default: "default"
+  bronze_schema_name:
+    description: "The schema where the bronze tables are located"
+    default: "bronze"

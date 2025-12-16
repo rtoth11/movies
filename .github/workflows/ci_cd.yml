@@ -5,14 +5,10 @@ on:
     branches: [ "main" ]
     paths:
       - "ingestion/**"
-      - "terraform/**"
-      - "movies_asset_bundle/**"
   push:
     branches: [ "main" ]
     paths:
       - "ingestion/**"
-      - "terraform/**"
-      - "movies_asset_bundle/**"
 
 permissions:
   id-token: write
@@ -26,8 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       ingestion: ${{ steps.filter.outputs.ingestion }}
-      terraform: ${{ steps.filter.outputs.terraform }}
-      movies_asset_bundle: ${{ steps.filter.outputs.movies_asset_bundle }}
     steps:
       - uses: actions/checkout@v4
 
@@ -38,10 +32,6 @@ jobs:
           filters: |
             ingestion:
               - 'ingestion/**'
-            terraform:
-              - 'terraform/**'
-            movies_asset_bundle:
-              - 'movies_asset_bundle/**'
 
   run_tests:
     needs: detect_changes
@@ -76,8 +66,6 @@ jobs:
           poetry run pytest --cov=src --cov-report=term-missing
 
   permissions_for_hcp_terraform:
-    needs: detect_changes
-    if: needs.detect_changes.outputs.terraform == 'true'
     runs-on: ubuntu-latest
     name: "Permissions for HCP Terraform"
     outputs:
@@ -131,8 +119,7 @@ jobs:
           echo "hcp_terraform_role_arn=${hcp_terraform_role_arn}" >> $GITHUB_OUTPUT
 
   terraform_infrastructure:
-    needs: [ detect_changes, permissions_for_hcp_terraform ]
-    if: needs.detect_changes.outputs.terraform == 'true'
+    needs: permissions_for_hcp_terraform
     runs-on: ubuntu-latest
     name: "Terraform Infrastructure"
     outputs:
@@ -309,7 +296,7 @@ jobs:
         id: apply_infrastructure
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: "./terraform/infrastructure"
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve --var "pg_database=${{ secrets.PG_DATABASE }}" --var "pg_user=${{ secrets.PG_USER }}" --var "pg_password=${{ secrets.PG_PASSWORD }}"
 
       - name: Set outputs
         id: set_outputs
@@ -321,9 +308,8 @@ jobs:
           echo "ingestion_lambda_function_name=$(terraform output -raw ingestion_lambda_function_name)" >> $GITHUB_OUTPUT
 
   build:
-    needs: [ detect_changes, terraform_infrastructure ]
+    needs: terraform_infrastructure
     if: >
-      needs.detect_changes.outputs.ingestion == 'true' &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -383,15 +369,19 @@ jobs:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          PG_HOST: ${{ needs.terraform_infrastructure.outputs.pg_host }}
+          PG_PORT: ${{ needs.terraform_infrastructure.outputs.pg_port }}
+          PG_DATABASE: ${{ secrets.PG_DATABASE }}
+          PG_USER: ${{ secrets.PG_USER }}
+          PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
         run: |
           aws lambda update-function-configuration \
             --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }} \
-            --environment "Variables={TMDB_API_KEY=$TMDB_API_KEY,DATABRICKS_HOST=$DATABRICKS_HOST,DATABRICKS_TOKEN=$DATABRICKS_TOKEN}"
+            --environment "Variables={TMDB_API_KEY=$TMDB_API_KEY,DATABRICKS_HOST=$DATABRICKS_HOST,DATABRICKS_TOKEN=$DATABRICKS_TOKEN,PG_HOST=$PG_HOST,PG_PORT=$PG_PORT,PG_DATABASE=$PG_DATABASE,PG_USER=$PG_USER,PG_PASSWORD=$PG_PASSWORD}"
 
   deploy_asset_bundle:
-    needs: detect_changes
+    needs: terraform_infrastructure
     if: >
-      needs.detect_changes.outputs.movies_asset_bundle == 'true' &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -405,10 +395,34 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
+      - name: Set AWS keys and PostgreSQL db info as Databricks secrets
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          PG_HOST: ${{ needs.terraform_infrastructure.outputs.pg_host }}
+          PG_PORT: ${{ needs.terraform_infrastructure.outputs.pg_port }}
+          PG_DATABASE: ${{ secrets.PG_DATABASE }}
+          PG_USER: ${{ secrets.PG_USER }}
+          PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
+        run: |
+          databricks secrets create-scope --scope secret-scope || echo "Scope already exists"
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"aws_access_key_id","string_value":"'"$AWS_ACCESS_KEY_ID"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"aws_secret_access_key","string_value":"'"$AWS_SECRET_ACCESS_KEY"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_host","string_value":"'"$PG_HOST"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_port","string_value":"'"$PG_PORT"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_database","string_value":"'"$PG_DATABASE"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_user","string_value":"'"$PG_USER"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_password","string_value":"'"$PG_PASSWORD"'"}'
+
       - name: Deploy movies asset bundle
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          BUNDLE_VAR_DATABRICKS_MOVIE_DATA_VOLUME_PATH: ${{ vars.DATABRICKS_MOVIE_DATA_VOLUME_PATH }}
+          BUNDLE_VAR_SECRET_SCOPE: "secret-scope"
+          BUNDLE_VAR_S3_BUCKET_NAME: ${{ needs.terraform_infrastructure.outputs.movies_s3_bucket_name }}
         working-directory: "./movies_asset_bundle"
         run: |
-          databricks bundle deploy -t prod --var movie_data_volume_path="${{ vars.DATABRICKS_MOVIE_DATA_VOLUME_PATH }}"
+          databricks bundle deploy -t prod
