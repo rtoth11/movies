@@ -5,6 +5,9 @@ GitHub secrets required:
 - TMDB_API_KEY: needed to authenticate with TMDB
 - DATABRICKS_HOST: needed to upload files to Databricks
 - DATABRICKS_TOKEN: needed to authenticate with Databricks (free edition doesn't have OIDC option)
+- PG_DATABASE: PostgreSQL database name for the RDS instance
+- PG_USER: PostgreSQL username for the RDS instance
+- PG_PASSWORD: PostgreSQL password for the RDS instance
 
 GitHub variables required:
 - DATABRICKS_MOVIE_DATA_VOLUME_PATH: where to upload files in Databricks

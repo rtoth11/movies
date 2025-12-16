@@ -1,5 +1,5 @@
-resource "aws_s3_bucket" "ingestion_s3_bucket" {
-  bucket = var.ingestion_s3_bucket_name
+resource "aws_s3_bucket" "movies_s3_bucket" {
+  bucket = var.movies_s3_bucket_name
   force_destroy = true
 }
 
@@ -23,7 +23,7 @@ resource "aws_iam_role" "ingestion_lambda_role" {
 data "aws_iam_policy_document" "s3_write_policy_document" {
   statement {
     effect = "Allow"
-    resources = ["${aws_s3_bucket.ingestion_s3_bucket.arn}/*"]
+    resources = ["${aws_s3_bucket.movies_s3_bucket.arn}/*"]
     actions = [
       "s3:PutObject"
     ]
@@ -73,7 +73,7 @@ resource "aws_lambda_function" "ingestion_lambda" {
 
   environment {
     variables = {
-      S3_BUCKET_NAME = var.ingestion_s3_bucket_name
+      S3_BUCKET_NAME = var.movies_s3_bucket_name
     }
   }
 

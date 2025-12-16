@@ -3,16 +3,8 @@ name: ci-cd
 on:
   pull_request:
     branches: [ "main" ]
-    paths:
-      - "ingestion/**"
-      - "terraform/**"
-      - "movies_asset_bundle/**"
   push:
     branches: [ "main" ]
-    paths:
-      - "ingestion/**"
-      - "terraform/**"
-      - "movies_asset_bundle/**"
 
 permissions:
   id-token: write
@@ -26,8 +18,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       ingestion: ${{ steps.filter.outputs.ingestion }}
-      terraform: ${{ steps.filter.outputs.terraform }}
-      movies_asset_bundle: ${{ steps.filter.outputs.movies_asset_bundle }}
     steps:
       - uses: actions/checkout@v4
 
@@ -38,10 +28,6 @@ jobs:
           filters: |
             ingestion:
               - 'ingestion/**'
-            terraform:
-              - 'terraform/**'
-            movies_asset_bundle:
-              - 'movies_asset_bundle/**'
 
   run_tests:
     needs: detect_changes
@@ -76,8 +62,6 @@ jobs:
           poetry run pytest --cov=src --cov-report=term-missing
 
   permissions_for_hcp_terraform:
-    needs: detect_changes
-    if: needs.detect_changes.outputs.terraform == 'true'
     runs-on: ubuntu-latest
     name: "Permissions for HCP Terraform"
     outputs:
@@ -131,14 +115,15 @@ jobs:
           echo "hcp_terraform_role_arn=${hcp_terraform_role_arn}" >> $GITHUB_OUTPUT
 
   terraform_infrastructure:
-    needs: [ detect_changes, permissions_for_hcp_terraform ]
-    if: needs.detect_changes.outputs.terraform == 'true'
+    needs: permissions_for_hcp_terraform
     runs-on: ubuntu-latest
     name: "Terraform Infrastructure"
     outputs:
       ingestion_ecr_repository_url: ${{ steps.set_outputs.outputs.ingestion_ecr_repository_url }}
       github_actions_role_arn: ${{ steps.set_outputs.outputs.github_actions_role_arn }}
       ingestion_lambda_function_name: ${{ steps.set_outputs.outputs.ingestion_lambda_function_name }}
+      movies_s3_bucket_name: ${{ steps.set_outputs.outputs.movies_s3_bucket_name }}
+      pg_port: ${{ steps.set_outputs.outputs.pg_port }}
     steps:
       - name: Checkout code for next step
         uses: actions/checkout@v4
@@ -303,27 +288,44 @@ jobs:
 
       - name: Terraform Plan
         working-directory: "./terraform/infrastructure"
-        run: terraform plan
+        run: terraform plan --var "pg_database=${{ secrets.PG_DATABASE }}" --var "pg_user=${{ secrets.PG_USER }}" --var "pg_password=${{ secrets.PG_PASSWORD }}"
 
       - name: Terraform Apply
         id: apply_infrastructure
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: "./terraform/infrastructure"
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve --var "pg_database=${{ secrets.PG_DATABASE }}" --var "pg_user=${{ secrets.PG_USER }}" --var "pg_password=${{ secrets.PG_PASSWORD }}"
+
+      - name: Set up Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Create secret scope in Databricks
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          databricks secrets create-scope secret-scope || echo "Scope already exists"
 
       - name: Set outputs
         id: set_outputs
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
         working-directory: "./terraform/infrastructure"
         run: |
           echo "ingestion_ecr_repository_url=$(terraform output -raw ingestion_ecr_repository_url)" >> $GITHUB_OUTPUT
           echo "github_actions_role_arn=$(terraform output -raw github_actions_role_arn)" >> $GITHUB_OUTPUT
           echo "ingestion_lambda_function_name=$(terraform output -raw ingestion_lambda_function_name)" >> $GITHUB_OUTPUT
+          echo "movies_s3_bucket_name=$(terraform output -raw movies_s3_bucket_name)" >> $GITHUB_OUTPUT
+          echo "pg_port=$(terraform output -raw pg_port)" >> $GITHUB_OUTPUT
+          PG_HOST=$(terraform output -raw pg_host)
+          echo "::add-mask::$PG_HOST"
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_host","string_value":"'"$PG_HOST"'"}'
 
   build:
-    needs: [ detect_changes, terraform_infrastructure ]
+    needs: [permissions_for_hcp_terraform, terraform_infrastructure]
     if: >
-      needs.detect_changes.outputs.ingestion == 'true' &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -378,20 +380,36 @@ jobs:
           aws lambda wait function-updated \
             --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }}
 
+      - name: Set up Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Get pg_host from Databricks secrets
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          PG_HOST=$(databricks secrets get-secret secret-scope pg_host | jq -r .value | base64 --decode)
+          echo "PG_HOST=$PG_HOST" >> $GITHUB_ENV
+          echo "::add-mask::$PG_HOST"
+
       - name: Update Lambda function environment variables
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          PG_HOST: ${{ env.PG_HOST }}
+          PG_PORT: ${{ needs.terraform_infrastructure.outputs.pg_port }}
+          PG_DATABASE: ${{ secrets.PG_DATABASE }}
+          PG_USER: ${{ secrets.PG_USER }}
+          PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
         run: |
           aws lambda update-function-configuration \
             --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }} \
-            --environment "Variables={TMDB_API_KEY=$TMDB_API_KEY,DATABRICKS_HOST=$DATABRICKS_HOST,DATABRICKS_TOKEN=$DATABRICKS_TOKEN}"
+            --environment "Variables={TMDB_API_KEY=$TMDB_API_KEY,DATABRICKS_HOST=$DATABRICKS_HOST,DATABRICKS_TOKEN=$DATABRICKS_TOKEN,PG_HOST=$PG_HOST,PG_PORT=$PG_PORT,PG_DATABASE=$PG_DATABASE,PG_USER=$PG_USER,PG_PASSWORD=$PG_PASSWORD}"
 
   deploy_asset_bundle:
-    needs: detect_changes
+    needs: [permissions_for_hcp_terraform, terraform_infrastructure]
     if: >
-      needs.detect_changes.outputs.movies_asset_bundle == 'true' &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -405,10 +423,31 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
+      - name: Set AWS keys and PostgreSQL db info as Databricks secrets
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          PG_PORT: ${{ needs.terraform_infrastructure.outputs.pg_port }}
+          PG_DATABASE: ${{ secrets.PG_DATABASE }}
+          PG_USER: ${{ secrets.PG_USER }}
+          PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
+        run: |
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"aws_access_key_id","string_value":"'"$AWS_ACCESS_KEY_ID"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"aws_secret_access_key","string_value":"'"$AWS_SECRET_ACCESS_KEY"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_port","string_value":"'"$PG_PORT"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_database","string_value":"'"$PG_DATABASE"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_user","string_value":"'"$PG_USER"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_password","string_value":"'"$PG_PASSWORD"'"}'
+
       - name: Deploy movies asset bundle
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          BUNDLE_VAR_movie_data_volume_path: ${{ vars.DATABRICKS_MOVIE_DATA_VOLUME_PATH }}
+          BUNDLE_VAR_secret_scope: "secret-scope"
+          BUNDLE_VAR_s3_bucket_name: ${{ needs.terraform_infrastructure.outputs.movies_s3_bucket_name }}
         working-directory: "./movies_asset_bundle"
         run: |
-          databricks bundle deploy -t prod --var movie_data_volume_path="${{ vars.DATABRICKS_MOVIE_DATA_VOLUME_PATH }}"
+          databricks bundle deploy -t prod

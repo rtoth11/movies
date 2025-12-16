@@ -18,8 +18,8 @@ variable github_role_path {
   type        = string
 }
 
-variable ingestion_s3_bucket_name {
-  description = "Name for the S3 bucket to store ingested data"
+variable movies_s3_bucket_name {
+  description = "Name for the S3 bucket to store movie data"
   type        = string
 }
 
@@ -61,4 +61,21 @@ variable ingestion_event_rule_name {
 variable ingestion_event_schedule_expression {
   description = "Schedule expression for the EventBridge rule that will trigger the ingestion Lambda function"
   type        = string
+}
+
+variable pg_database {
+  description = "Name of the PostgreSQL database"
+  type        = string
+}
+
+variable pg_user {
+  description = "Username for the PostgreSQL database"
+  type        = string
+  sensitive = true
+}
+
+variable pg_password {
+  description = "Password for the PostgreSQL database"
+  type        = string
+  sensitive   = true
 }

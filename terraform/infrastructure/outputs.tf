@@ -12,3 +12,19 @@ output "ingestion_lambda_function_name" {
   description = "The name of the ingestion Lambda function."
   value       = aws_lambda_function.ingestion_lambda.function_name
 }
+
+output "movies_s3_bucket_name" {
+  description = "The name of the S3 bucket used for movie data storage."
+  value       = aws_s3_bucket.movies_s3_bucket.bucket
+}
+
+output "pg_host" {
+  description = "The address of the PostgreSQL RDS instance."
+  value       = aws_db_instance.postgres_instance.address
+  sensitive   = true
+}
+
+output "pg_port" {
+  description = "The port of the PostgreSQL RDS instance."
+  value       = aws_db_instance.postgres_instance.port
+}
