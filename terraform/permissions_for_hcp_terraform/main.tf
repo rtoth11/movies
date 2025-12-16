@@ -85,7 +85,50 @@ data "aws_iam_policy_document" "terraform_policy_document" {
       "s3:GetBucketAcl",
       "s3:GetBucketCORS",
       "s3:GetBucketPolicy",
-      "sts:GetCallerIdentity"
+      "sts:GetCallerIdentity",
+      "ec2:CreateVpc",
+      "ec2:ModifyVpcAttribute",
+      "ec2:DescribeVpcs",
+      "ec2:DeleteVpc",
+      "ec2:CreateTags",
+      "ec2:DescribeVpcAttribute",
+      "ec2:CreateSubnet",
+      "ec2:DescribeSubnets",
+      "ec2:DeleteSubnet",
+      "ec2:ModifySubnetAttribute",
+      "ec2:CreateInternetGateway",
+      "ec2:DescribeInternetGateways",
+      "ec2:DeleteInternetGateway",
+      "ec2:AttachInternetGateway",
+      "ec2:DetachInternetGateway",
+      "ec2:CreateRouteTable",
+      "ec2:DescribeRouteTables",
+      "ec2:DeleteRouteTable",
+      "ec2:CreateRoute",
+      "ec2:DeleteRoute",
+      "ec2:AssociateRouteTable",
+      "ec2:DisassociateRouteTable",
+      "ec2:CreateSecurityGroup",
+      "ec2:DescribeSecurityGroups",
+      "ec2:DeleteSecurityGroup",
+      "ec2:AuthorizeSecurityGroupIngress",
+      "ec2:RevokeSecurityGroupIngress",
+      "ec2:AuthorizeSecurityGroupEgress",
+      "ec2:RevokeSecurityGroupEgress",
+      "ec2:DescribeNetworkInterfaces",
+      "ec2:DescribeAvailabilityZones",
+      "rds:CreateDBInstance",
+      "rds:ModifyDBInstance",
+      "rds:DeleteDBInstance",
+      "rds:DescribeDBInstances",
+      "rds:CreateDBSubnetGroup",
+      "rds:DeleteDBSubnetGroup",
+      "rds:DescribeDBSubnetGroups",
+      "rds:ListTagsForResource",
+      "rds:AddTagsToResource",
+      "rds:RemoveTagsFromResource",
+      "rds:AddRoleToDBInstance",
+      "rds:RemoveRoleFromDBInstance"
     ]
     resources = ["*"]
   }
@@ -131,7 +174,8 @@ data "aws_iam_policy_document" "terraform_policy_document" {
       "iam:GetPolicy",
       "iam:GetPolicyVersion",
       "iam:ListPolicyVersions",
-      "iam:CreatePolicyVersion"
+      "iam:CreatePolicyVersion",
+      "iam:DeletePolicyVersion",
     ]
 
     resources = [
@@ -151,7 +195,8 @@ data "aws_iam_policy_document" "terraform_policy_document" {
       "iam:ListAttachedRolePolicies",
       "iam:ListInstanceProfilesForRole",
       "iam:ListRolePolicies",
-      "iam:PassRole"
+      "iam:PassRole",
+      "iam:CreateServiceLinkedRole"
     ]
 
     resources = [
