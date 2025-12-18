@@ -3,12 +3,8 @@ name: ci-cd
 on:
   pull_request:
     branches: [ "main" ]
-    paths:
-      - "ingestion/**"
   push:
     branches: [ "main" ]
-    paths:
-      - "ingestion/**"
 
 permissions:
   id-token: write
