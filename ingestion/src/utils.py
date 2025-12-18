@@ -112,7 +112,7 @@ def get_already_stored_movies() -> set[int]:
 
     try:
         with pg_conn.cursor() as cursor:
-            cursor.execute("SELECT tmdb_id FROM models.silver_movies;")
+            cursor.execute("SELECT tmdb_id FROM default.silver_movies;")
             rows = cursor.fetchall()
             return {row[0] for row in rows}
     finally:
