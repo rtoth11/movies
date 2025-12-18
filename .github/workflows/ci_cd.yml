@@ -97,7 +97,7 @@ jobs:
 
       - name: Terraform Plan
         working-directory: "./terraform/permissions_for_hcp_terraform"
-        run: terraform plan
+        run: terraform plan --var "pg_database=${{ secrets.PG_DATABASE }}" --var "pg_user=${{ secrets.PG_USER }}" --var "pg_password=${{ secrets.PG_PASSWORD }}"
 
       - name: Terraform Apply
         id: apply_permissions_for_hcp_terraform
@@ -290,7 +290,7 @@ jobs:
 
       - name: Terraform Plan
         working-directory: "./terraform/infrastructure"
-        run: terraform plan
+        run: terraform plan --var "pg_database=${{ secrets.PG_DATABASE }}" --var "pg_user=${{ secrets.PG_USER }}" --var "pg_password=${{ secrets.PG_PASSWORD }}"
 
       - name: Terraform Apply
         id: apply_infrastructure
