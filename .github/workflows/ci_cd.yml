@@ -306,6 +306,11 @@ jobs:
           echo "ingestion_ecr_repository_url=$(terraform output -raw ingestion_ecr_repository_url)" >> $GITHUB_OUTPUT
           echo "github_actions_role_arn=$(terraform output -raw github_actions_role_arn)" >> $GITHUB_OUTPUT
           echo "ingestion_lambda_function_name=$(terraform output -raw ingestion_lambda_function_name)" >> $GITHUB_OUTPUT
+          echo "movies_s3_bucket_name=$(terraform output -raw movies_s3_bucket_name)" >> $GITHUB_OUTPUT
+          PG_HOST=$(terraform output -raw pg_host)
+          echo "::add-mask::$PG_HOST"
+          echo "pg_host=$PG_HOST" >> $GITHUB_OUTPUT
+          echo "pg_port=$(terraform output -raw pg_port)" >> $GITHUB_OUTPUT
 
   build:
     needs: terraform_infrastructure
