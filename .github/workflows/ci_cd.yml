@@ -122,6 +122,9 @@ jobs:
       ingestion_ecr_repository_url: ${{ steps.set_outputs.outputs.ingestion_ecr_repository_url }}
       github_actions_role_arn: ${{ steps.set_outputs.outputs.github_actions_role_arn }}
       ingestion_lambda_function_name: ${{ steps.set_outputs.outputs.ingestion_lambda_function_name }}
+      movies_s3_bucket_name: ${{ steps.set_outputs.outputs.movies_s3_bucket_name }}
+      pg_host: ${{ steps.set_outputs.outputs.pg_host }}
+      pg_port: ${{ steps.set_outputs.outputs.pg_port }}
     steps:
       - name: Checkout code for next step
         uses: actions/checkout@v4
@@ -408,7 +411,7 @@ jobs:
           PG_USER: ${{ secrets.PG_USER }}
           PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
         run: |
-          databricks secrets create-scope --scope secret-scope || echo "Scope already exists"
+          databricks secrets create-scope secret-scope || echo "Scope already exists"
           databricks secrets put-secret --json '{"scope":"secret-scope","key":"aws_access_key_id","string_value":"'"$AWS_ACCESS_KEY_ID"'"}'
           databricks secrets put-secret --json '{"scope":"secret-scope","key":"aws_secret_access_key","string_value":"'"$AWS_SECRET_ACCESS_KEY"'"}'
           databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_host","string_value":"'"$PG_HOST"'"}'
@@ -421,7 +424,7 @@ jobs:
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          BUNDLE_VAR_DATABRICKS_MOVIE_DATA_VOLUME_PATH: ${{ vars.DATABRICKS_MOVIE_DATA_VOLUME_PATH }}
+          BUNDLE_VAR_MOVIE_DATA_VOLUME_PATH: ${{ vars.DATABRICKS_MOVIE_DATA_VOLUME_PATH }}
           BUNDLE_VAR_SECRET_SCOPE: "secret-scope"
           BUNDLE_VAR_S3_BUCKET_NAME: ${{ needs.terraform_infrastructure.outputs.movies_s3_bucket_name }}
         working-directory: "./movies_asset_bundle"
