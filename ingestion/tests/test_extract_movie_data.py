@@ -6,6 +6,7 @@ from extract_movie_data import (
     _process_dialogue_lines,
     _extract_blocks_from_page,
     _extract_script_from_pdf,
+    _should_process_movie,
     _extract_script_links,
     _extract_and_store_movie_data,
     tmdb_search,
@@ -14,28 +15,6 @@ from extract_movie_data import (
     VOLUME_FILE_PATH
 )
 import extract_movie_data
-
-
-def test__add_movie_data_no_results(mocker):
-    mocker.patch.object(
-        tmdb_search,
-        "movie",
-        return_value={"results": []}
-    )
-
-    result = _add_movie_data("FakeMovie", "2020", [])
-    assert result == {}
-
-
-def test__add_movie_data_multiple_results(mocker):
-    mocker.patch.object(
-        tmdb_search,
-        "movie",
-        return_value={"results": [{"title": "Movie"}, {"title": "Movie"}]}
-    )
-
-    result = _add_movie_data("Movie", "2020", [])
-    assert result == {}
 
 
 def test__add_movie_data_success(mocker):
@@ -373,6 +352,50 @@ def test__extract_script_from_pdf(mocker):
     assert mock_extract.call_count == 2
 
 
+def test__should_process_movie_no_results(mocker):
+    mocker.patch.object(
+        tmdb_search,
+        "movie",
+        return_value={"results": []}
+    )
+
+    result = _should_process_movie("FakeMovie", "2020", set())
+    assert result == False
+
+
+def test__should_process_movie_multiple_results(mocker):
+    mocker.patch.object(
+        tmdb_search,
+        "movie",
+        return_value={"results": [{"title": "Movie"}, {"title": "Movie"}]}
+    )
+
+    result = _should_process_movie("Movie", "2020", set())
+    assert result == False
+
+
+def test__should_process_movie_movie_already_stored(mocker):
+    mocker.patch.object(
+        tmdb_search,
+        "movie",
+        return_value={"results": [{"title": "Movie", "id": 123}]}
+    )
+
+    result = _should_process_movie("Movie", "2020", {123})
+    assert result == False
+
+
+def test__should_process_movie_success(mocker):
+    mocker.patch.object(
+        tmdb_search,
+        "movie",
+        return_value={"results": [{"title": "Movie", "id": 123}]}
+    )
+
+    result = _should_process_movie("Movie", "2020", set())
+    assert result == True
+
+
 def test__extract_script_links(mocker):
     # mock GraphQL response
     mock_post = mocker.patch("extract_movie_data.requests.post")
@@ -486,6 +509,9 @@ def test__extract_and_store_movie_data(mocker):
         return_value=[("Movie", "2020", "http://example.com/m.pdf")]
     )
 
+    # Mock movie processing check
+    mocker.patch("extract_movie_data._should_process_movie", return_value=True)
+
     # Mock PDF download
     mocker.patch("extract_movie_data.utils.download_pdf", return_value="/tmp/m.pdf")
 
@@ -499,7 +525,7 @@ def test__extract_and_store_movie_data(mocker):
     mock_ws = Mock()
     mock_ws.files.upload = Mock()
 
-    _extract_and_store_movie_data("action", mock_ws)
+    _extract_and_store_movie_data("action", mock_ws, set())
 
     # Validate uploaded JSON content
     args, kwargs = mock_ws.files.upload.call_args
@@ -510,3 +536,35 @@ def test__extract_and_store_movie_data(mocker):
 
     json_loaded = json.loads(uploaded_stream.getvalue().decode())
     assert json_loaded == [{"id": 1}]
+
+
+def test__extract_and_store_movie_data_should_not_process(mocker):
+    # Mock script links
+    mocker.patch(
+        "extract_movie_data._extract_script_links",
+        return_value=[("Movie", "2020", "http://example.com/m.pdf")]
+    )
+
+    # Mock movie processing check to return False
+    mocker.patch("extract_movie_data._should_process_movie", return_value=False)
+
+    # Mock PDF download
+    mocker.patch("extract_movie_data.utils.download_pdf", return_value="/tmp/m.pdf")
+
+    # Mock script extraction
+    mocker.patch("extract_movie_data._extract_script_from_pdf", return_value=[{"script": True}])
+
+    # Mock function that adds TMDB data
+    mock_add_movie_data = mocker.patch("extract_movie_data._add_movie_data")
+
+    # Mock Databricks workspace client
+    mock_ws = Mock()
+    mock_ws.files.upload = Mock()
+
+    _extract_and_store_movie_data("action", mock_ws, set())
+
+    # Validate that no upload occurred
+    assert not mock_ws.files.upload.called
+
+    # Validate that _add_movie_data was never called
+    assert not mock_add_movie_data.called

@@ -5,8 +5,8 @@ movies_project:
     dev:
       type: databricks
       method: http
-      catalog: movies
-      schema: "{{ var('dev_schema') }}"
+      catalog: "{{ var('output_catalog_name') }}"
+      schema: "{{ var('output_schema_name') }}"
 
       http_path: /sql/1.0/warehouses/d050fd97b5b14e8e
 
@@ -16,8 +16,8 @@ movies_project:
     prod:
       type: databricks
       method: http
-      catalog: movies
-      schema: default
+      catalog: "{{ var('output_catalog_name') }}"
+      schema: "{{ var('output_schema_name') }}"
 
       http_path: /sql/1.0/warehouses/d050fd97b5b14e8e
 

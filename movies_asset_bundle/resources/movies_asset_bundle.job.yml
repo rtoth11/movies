@@ -9,24 +9,43 @@ resources:
           unit: DAYS
 
       tasks:
-        - task_key: main_task
+        - task_key: json_to_table_task
           environment_key: default
-          python_wheel_task:
-            package_name: movies_asset_bundle
-            entry_point: main
+          spark_python_task:
+            python_file: "../src/json_to_table.py"
             parameters:
               - --movie-data-volume-path
               - ${var.movie_data_volume_path}
+              - --bronze-schema-name
+              - ${var.bronze_schema_name}
+              - --asset-bundle-target
+              - ${bundle.target}
 
         - task_key: dbt
           depends_on:
-            - task_key: main_task
+            - task_key: json_to_table_task
           environment_key: default
           dbt_task:
             project_directory: ../dbt
             profiles_directory: dbt_profiles/
             commands:
-              - 'dbt run --target=${bundle.target} --vars "{ dev_schema: models }"'
+              - "dbt run --target=${bundle.target} --vars \"{ output_schema_name: '${var.schema_name}', output_catalog_name: '${var.catalog_name}', bronze_schema_name: '${var.bronze_schema_name}' }\""
+
+        - task_key: databricks_to_postgres_task
+          depends_on:
+            - task_key: dbt
+          environment_key: default
+          spark_python_task:
+            python_file: "../src/databricks_to_postgres.py"
+            parameters:
+              - --source-catalog
+              - ${var.catalog_name}
+              - --source-schema
+              - ${var.schema_name}
+              - --secret-scope
+              - ${var.secret_scope}
+              - --s3-bucket-name
+              - ${var.s3_bucket_name}
 
       environments:
         - environment_key: default
