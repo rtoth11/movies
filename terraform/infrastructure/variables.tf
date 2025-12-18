@@ -71,6 +71,7 @@ variable pg_database {
 variable pg_user {
   description = "Username for the PostgreSQL database"
   type        = string
+  sensitive = true
 }
 
 variable pg_password {

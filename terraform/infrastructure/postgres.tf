@@ -98,9 +98,9 @@ resource "aws_db_instance" "postgres_instance" {
   engine                  = "postgres"
   engine_version          = "15.10"
   instance_class          = "db.t4g.micro"
-  db_name                 = var.postgres_db_name
-  username                = var.postgres_db_username
-  password                = var.postgres_db_password
+  db_name                 = var.pg_database
+  username                = var.pg_user
+  password                = var.pg_password
   skip_final_snapshot     = true
   vpc_security_group_ids  = [aws_security_group.postgres_sg.id]
   db_subnet_group_name    = aws_db_subnet_group.postgres_subnet_group.name
