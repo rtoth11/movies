@@ -306,10 +306,6 @@ jobs:
           echo "ingestion_lambda_function_name=$(terraform output -raw ingestion_lambda_function_name)" >> $GITHUB_OUTPUT
           echo "movies_s3_bucket_name=$(terraform output -raw movies_s3_bucket_name)" >> $GITHUB_OUTPUT
           echo "pg_port=$(terraform output -raw pg_port)" >> $GITHUB_OUTPUT
-
-      - name: Set PG_HOST environment variable
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
           PG_HOST=$(terraform output -raw pg_host)
           echo "::add-mask::$PG_HOST"
           echo "PG_HOST=$PG_HOST" >> $GITHUB_ENV
