@@ -307,7 +307,14 @@ jobs:
           echo "movies_s3_bucket_name=$(terraform output -raw movies_s3_bucket_name)" >> $GITHUB_OUTPUT
           echo "pg_port=$(terraform output -raw pg_port)" >> $GITHUB_OUTPUT
 
-      - name: Check if PH_HOST variable exists
+      - name: Set PG_HOST environment variable
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          PG_HOST=$(terraform output -raw pg_host)
+          echo "::add-mask::$PG_HOST"
+          echo "PG_HOST=$PG_HOST" >> $GITHUB_ENV
+
+      - name: Check if PG_HOST variable exists
         id: check_pg_host_variable
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
@@ -319,7 +326,7 @@ jobs:
             | jq -r '.data[] | select(.attributes.key=="PG_HOST") | .id')
           echo "VARIABLE_ID_PG_HOST=$VARIABLE_ID_PG_HOST" >> $GITHUB_ENV
 
-      - name: Set PG_HOST
+      - name: Set PG_HOST HCP Terraform variable
         if: >-
           ${{ github.event_name == 'push' &&
               github.ref == 'refs/heads/main' &&
@@ -334,7 +341,7 @@ jobs:
                 "type":"vars",
                 "attributes": {
                   "key":"PG_HOST",
-                  "value":"'"${{ needs.terraform_infrastructure.outputs.pg_host }}"'",
+                  "value":"'"${{ env.PG_HOST }}"'",
                   "category":"env",
                   "hcl":false,
                   "sensitive":true
@@ -351,7 +358,7 @@ jobs:
             }' \
             https://app.terraform.io/api/v2/vars
 
-      - name: Update PG_HOST
+      - name: Update PG_HOST HCP Terraform variable
         if: >-
           ${{ github.event_name == 'push' &&
               github.ref == 'refs/heads/main' &&
@@ -367,7 +374,7 @@ jobs:
                 "id":"'"${{ env.VARIABLE_ID_PG_HOST }}"'",
                 "attributes": {
                   "key":"PG_HOST",
-                  "value":"'"${{ needs.terraform_infrastructure.outputs.pg_host }}"'",
+                  "value":"'"${{ env.PG_HOST }}"'",
                   "category":"env",
                   "hcl":false,
                   "sensitive":true
@@ -411,7 +418,7 @@ jobs:
             | jq -r '.data.id')
           echo "WORKSPACE_ID=$WORKSPACE_ID" >> $GITHUB_ENV
 
-      - name: Get PG_HOST from HCP Terraform
+      - name: Get PG_HOST variable from HCP Terraform
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           PG_HOST=$(curl \
@@ -498,7 +505,7 @@ jobs:
             | jq -r '.data.id')
           echo "WORKSPACE_ID=$WORKSPACE_ID" >> $GITHUB_ENV
 
-      - name: Get PG_HOST from HCP Terraform
+      - name: Get PG_HOST variable from HCP Terraform
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           PG_HOST=$(curl \
