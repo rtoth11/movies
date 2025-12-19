@@ -123,7 +123,6 @@ jobs:
       github_actions_role_arn: ${{ steps.set_outputs.outputs.github_actions_role_arn }}
       ingestion_lambda_function_name: ${{ steps.set_outputs.outputs.ingestion_lambda_function_name }}
       movies_s3_bucket_name: ${{ steps.set_outputs.outputs.movies_s3_bucket_name }}
-      pg_host: ${{ steps.set_outputs.outputs.pg_host }}
       pg_port: ${{ steps.set_outputs.outputs.pg_port }}
     steps:
       - name: Checkout code for next step
@@ -306,13 +305,79 @@ jobs:
           echo "github_actions_role_arn=$(terraform output -raw github_actions_role_arn)" >> $GITHUB_OUTPUT
           echo "ingestion_lambda_function_name=$(terraform output -raw ingestion_lambda_function_name)" >> $GITHUB_OUTPUT
           echo "movies_s3_bucket_name=$(terraform output -raw movies_s3_bucket_name)" >> $GITHUB_OUTPUT
-          PG_HOST=$(terraform output -raw pg_host)
-          echo "::add-mask::$PG_HOST"
-          echo "pg_host=$PG_HOST" >> $GITHUB_OUTPUT
           echo "pg_port=$(terraform output -raw pg_port)" >> $GITHUB_OUTPUT
 
+      - name: Check if PH_HOST variable exists
+        id: check_pg_host_variable
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          VARIABLE_ID_PG_HOST=$(curl \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request GET \
+            "https://app.terraform.io/api/v2/workspaces/${{ env.WORKSPACE_ID }}/vars" \
+            | jq -r '.data[] | select(.attributes.key=="PG_HOST") | .id')
+          echo "VARIABLE_ID_PG_HOST=$VARIABLE_ID_PG_HOST" >> $GITHUB_ENV
+
+      - name: Set PG_HOST
+        if: >-
+          ${{ github.event_name == 'push' &&
+              github.ref == 'refs/heads/main' &&
+              (env.VARIABLE_ID_PG_HOST || '') == '' }}
+        run: |
+          curl \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request POST \
+            --data '{
+              "data": {
+                "type":"vars",
+                "attributes": {
+                  "key":"PG_HOST",
+                  "value":"'"${{ needs.terraform_infrastructure.outputs.pg_host }}"'",
+                  "category":"env",
+                  "hcl":false,
+                  "sensitive":true
+                },
+                "relationships": {
+                  "workspace": {
+                    "data": {
+                      "type": "workspaces",
+                      "id": "'"${{ env.WORKSPACE_ID }}"'"
+                    }
+                  }
+                }
+              }
+            }' \
+            https://app.terraform.io/api/v2/vars
+
+      - name: Update PG_HOST
+        if: >-
+          ${{ github.event_name == 'push' &&
+              github.ref == 'refs/heads/main' &&
+              (env.VARIABLE_ID_PG_HOST || '') != '' }}
+        run: |
+          curl \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request PATCH \
+            --data '{
+              "data": {
+                "type":"vars",
+                "id":"'"${{ env.VARIABLE_ID_PG_HOST }}"'",
+                "attributes": {
+                  "key":"PG_HOST",
+                  "value":"'"${{ needs.terraform_infrastructure.outputs.pg_host }}"'",
+                  "category":"env",
+                  "hcl":false,
+                  "sensitive":true
+                }
+              }
+            }' \
+            https://app.terraform.io/api/v2/vars/"${{ env.VARIABLE_ID_PG_HOST }}"
+
   build:
-    needs: terraform_infrastructure
+    needs: [permissions_for_hcp_terraform, terraform_infrastructure]
     if: >
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
@@ -334,6 +399,29 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Get infrastructure workspace ID
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          WORKSPACE_ID=$(curl \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request GET \
+            "https://app.terraform.io/api/v2/organizations/${{ needs.permissions_for_hcp_terraform.outputs.hcp_terraform_infrastructure_organization }}/workspaces/${{ needs.permissions_for_hcp_terraform.outputs.hcp_terraform_infrastructure_workspace_name }}" \
+            | jq -r '.data.id')
+          echo "WORKSPACE_ID=$WORKSPACE_ID" >> $GITHUB_ENV
+
+      - name: Get PG_HOST from HCP Terraform
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          PG_HOST=$(curl \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request GET \
+            "https://app.terraform.io/api/v2/workspaces/${{ env.WORKSPACE_ID }}/vars" \
+            | jq -r '.data[] | select(.attributes.key=="PG_HOST") | .attributes.value')
+          echo "::add-mask::$PG_HOST"
+          echo "PG_HOST=$PG_HOST" >> $GITHUB_ENV
 
       - name: Set image tags
         id: set_tags
@@ -373,7 +461,7 @@ jobs:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          PG_HOST: ${{ needs.terraform_infrastructure.outputs.pg_host }}
+          PG_HOST: ${{ env.PG_HOST }}
           PG_PORT: ${{ needs.terraform_infrastructure.outputs.pg_port }}
           PG_DATABASE: ${{ secrets.PG_DATABASE }}
           PG_USER: ${{ secrets.PG_USER }}
@@ -384,7 +472,7 @@ jobs:
             --environment "Variables={TMDB_API_KEY=$TMDB_API_KEY,DATABRICKS_HOST=$DATABRICKS_HOST,DATABRICKS_TOKEN=$DATABRICKS_TOKEN,PG_HOST=$PG_HOST,PG_PORT=$PG_PORT,PG_DATABASE=$PG_DATABASE,PG_USER=$PG_USER,PG_PASSWORD=$PG_PASSWORD}"
 
   deploy_asset_bundle:
-    needs: terraform_infrastructure
+    needs: [permissions_for_hcp_terraform, terraform_infrastructure]
     if: >
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
@@ -399,13 +487,36 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
+      - name: Get infrastructure workspace ID
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          WORKSPACE_ID=$(curl \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request GET \
+            "https://app.terraform.io/api/v2/organizations/${{ needs.permissions_for_hcp_terraform.outputs.hcp_terraform_infrastructure_organization }}/workspaces/${{ needs.permissions_for_hcp_terraform.outputs.hcp_terraform_infrastructure_workspace_name }}" \
+            | jq -r '.data.id')
+          echo "WORKSPACE_ID=$WORKSPACE_ID" >> $GITHUB_ENV
+
+      - name: Get PG_HOST from HCP Terraform
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          PG_HOST=$(curl \
+            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
+            --header "Content-Type: application/vnd.api+json" \
+            --request GET \
+            "https://app.terraform.io/api/v2/workspaces/${{ env.WORKSPACE_ID }}/vars" \
+            | jq -r '.data[] | select(.attributes.key=="PG_HOST") | .attributes.value')
+          echo "::add-mask::$PG_HOST"
+          echo "PG_HOST=$PG_HOST" >> $GITHUB_ENV
+
       - name: Set AWS keys and PostgreSQL db info as Databricks secrets
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          PG_HOST: ${{ needs.terraform_infrastructure.outputs.pg_host }}
+          PG_HOST: ${{ env.PG_HOST }}
           PG_PORT: ${{ needs.terraform_infrastructure.outputs.pg_port }}
           PG_DATABASE: ${{ secrets.PG_DATABASE }}
           PG_USER: ${{ secrets.PG_USER }}
