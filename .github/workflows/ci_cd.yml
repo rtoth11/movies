@@ -424,9 +424,9 @@ jobs:
         env:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          BUNDLE_VAR_MOVIE_DATA_VOLUME_PATH: ${{ vars.DATABRICKS_MOVIE_DATA_VOLUME_PATH }}
-          BUNDLE_VAR_SECRET_SCOPE: "secret-scope"
-          BUNDLE_VAR_S3_BUCKET_NAME: ${{ needs.terraform_infrastructure.outputs.movies_s3_bucket_name }}
+          BUNDLE_VAR_movie_data_volume_path: ${{ vars.DATABRICKS_MOVIE_DATA_VOLUME_PATH }}
+          BUNDLE_VAR_secret_scope: "secret-scope"
+          BUNDLE_VAR_s3_bucket_name: ${{ needs.terraform_infrastructure.outputs.movies_s3_bucket_name }}
         working-directory: "./movies_asset_bundle"
         run: |
           databricks bundle deploy -t prod
