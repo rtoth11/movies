@@ -296,9 +296,15 @@ jobs:
         working-directory: "./terraform/infrastructure"
         run: terraform apply -auto-approve --var "pg_database=${{ secrets.PG_DATABASE }}" --var "pg_user=${{ secrets.PG_USER }}" --var "pg_password=${{ secrets.PG_PASSWORD }}"
 
-      - name: Authenticate gh
+      - name: Set up Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Create secret scope in Databricks
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
         run: |
-          echo "${{ secrets.GH_PAT }}" | gh auth login --with-token
+          databricks secrets create-scope secret-scope || echo "Scope already exists"
 
       - name: Set outputs
         id: set_outputs
@@ -312,7 +318,7 @@ jobs:
           echo "pg_port=$(terraform output -raw pg_port)" >> $GITHUB_OUTPUT
           PG_HOST=$(terraform output -raw pg_host)
           echo "::add-mask::$PG_HOST"
-          gh secret set PG_HOST --body "$PG_HOST" --repo ${{ github.repository }}
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_host","string_value":"'"$PG_HOST"'"}'
 
   build:
     needs: [permissions_for_hcp_terraform, terraform_infrastructure]
@@ -371,12 +377,24 @@ jobs:
           aws lambda wait function-updated \
             --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }}
 
+      - name: Set up Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Get pg_host from Databricks secrets
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          PG_HOST=$(databricks secrets get-secret secret-scope pg_host | jq -r .value | base64 --decode)
+          echo "PG_HOST=$PG_HOST" >> $GITHUB_ENV
+          echo "::add-mask::$PG_HOST"
+
       - name: Update Lambda function environment variables
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          PG_HOST: ${{ secrets.PG_HOST }}
+          PG_HOST: ${{ env.PG_HOST }}
           PG_PORT: ${{ needs.terraform_infrastructure.outputs.pg_port }}
           PG_DATABASE: ${{ secrets.PG_DATABASE }}
           PG_USER: ${{ secrets.PG_USER }}
@@ -408,16 +426,13 @@ jobs:
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          PG_HOST: ${{ secrets.PG_HOST }}
           PG_PORT: ${{ needs.terraform_infrastructure.outputs.pg_port }}
           PG_DATABASE: ${{ secrets.PG_DATABASE }}
           PG_USER: ${{ secrets.PG_USER }}
           PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
         run: |
-          databricks secrets create-scope secret-scope || echo "Scope already exists"
           databricks secrets put-secret --json '{"scope":"secret-scope","key":"aws_access_key_id","string_value":"'"$AWS_ACCESS_KEY_ID"'"}'
           databricks secrets put-secret --json '{"scope":"secret-scope","key":"aws_secret_access_key","string_value":"'"$AWS_SECRET_ACCESS_KEY"'"}'
-          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_host","string_value":"'"$PG_HOST"'"}'
           databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_port","string_value":"'"$PG_PORT"'"}'
           databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_database","string_value":"'"$PG_DATABASE"'"}'
           databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_user","string_value":"'"$PG_USER"'"}'
