@@ -309,6 +309,9 @@ jobs:
       - name: Set outputs
         id: set_outputs
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
         working-directory: "./terraform/infrastructure"
         run: |
           echo "ingestion_ecr_repository_url=$(terraform output -raw ingestion_ecr_repository_url)" >> $GITHUB_OUTPUT
