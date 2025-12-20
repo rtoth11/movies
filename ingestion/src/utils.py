@@ -115,5 +115,12 @@ def get_already_stored_movies() -> set[int]:
             cursor.execute("SELECT tmdb_id FROM default.silver_movies;")
             rows = cursor.fetchall()
             return {row[0] for row in rows}
+    except (psycopg2.errors.UndefinedTable,
+            psycopg2.errors.InvalidSchemaName) as e:
+        logging.warning(f"Table or schema missing: {e}.")
+        return set()
+    except Exception:
+        logging.exception("Unexpected error while fetching stored movies.")
+        raise
     finally:
         pg_conn.close()
