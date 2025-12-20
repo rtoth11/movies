@@ -19,8 +19,8 @@ output "movies_s3_bucket_name" {
 }
 
 output "pg_host" {
-  description = "The endpoint of the PostgreSQL RDS instance."
-  value       = aws_db_instance.postgres_instance.endpoint
+  description = "The address of the PostgreSQL RDS instance."
+  value       = aws_db_instance.postgres_instance.address
   sensitive   = true
 }
 
