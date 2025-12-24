@@ -97,6 +97,9 @@ def export_table_to_csvs(catalog, schema, table):
     df = df.filter(df["inserted_at"] > datetime.datetime.now() - datetime.timedelta(hours=1))
     csvs_path = os.path.join(TEMPORARY_CSVS_VOLUME_PATH, f"{table}_csv")
 
+    if len(df.head(1)) == 0:
+        return None, None
+
     logging.debug(f"Writing CSV to {csvs_path}.")
 
     df.write \
@@ -186,12 +189,14 @@ def export_schema_to_postgres(source_catalog,
     )
 
     empty_volume(TEMPORARY_CSVS_VOLUME_PATH)
-
     delete_s3_files(s3_bucket, prefix)
+
+    new_data_exists = False
 
     try:
         with pg_conn.cursor() as cursor:
             cursor.execute("CREATE EXTENSION IF NOT EXISTS aws_s3 CASCADE;")
+            cursor.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm CASCADE;")
             pg_conn.commit()
 
         for table in tables:
@@ -199,6 +204,10 @@ def export_schema_to_postgres(source_catalog,
 
             local_path_to_csvs, spark_schema = export_table_to_csvs(
                 source_catalog, source_schema, table)
+
+            if local_path_to_csvs is None:
+                logging.info(f"No new data to export for table: {table}. Skipping.")
+                continue
 
             s3_paths = []
 
@@ -221,7 +230,100 @@ def export_schema_to_postgres(source_catalog,
                 os.remove(local_file_path)
             os.rmdir(local_path_to_csvs)
 
+            new_data_exists = True
             logging.info(f"Finished table: {table}.")
+
+        create_view_sql = f"""
+            CREATE MATERIALIZED VIEW IF NOT EXISTS "{target_schema}"."all_tables" AS
+
+            (SELECT
+                'dialogue' AS type,
+                d.id AS block_id,
+                d.movie_tmdb_id,
+                d.index_in_script,
+                d.dialogue AS content,
+                d.suffix,
+                d.parentheticals,
+                c.id AS character_id,
+                c.name AS character,
+                to_tsvector('english', d.dialogue) AS search_vector
+            FROM "{target_schema}"."gold_dialogues" d
+            JOIN "{target_schema}".gold_characters c ON d.character_id = c.id)
+            
+            UNION ALL
+            
+            (SELECT
+                'description',
+                id,
+                movie_tmdb_id,
+                index_in_script,
+                description,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                to_tsvector('english', description)
+            FROM "{target_schema}"."gold_descriptions")
+            
+            UNION ALL
+
+            (SELECT
+                'scene',
+                id,
+                movie_tmdb_id,
+                index_in_script,
+                scene,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                to_tsvector('english', scene)
+            FROM "{target_schema}"."gold_scenes")
+            
+            UNION ALL
+
+            (SELECT
+                'unknown',
+                id,
+                movie_tmdb_id,
+                index_in_script,
+                content,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                to_tsvector('english', content)
+            FROM "{target_schema}"."gold_unknown_blocks");
+        """
+
+        create_search_vector_index_sql = f"""
+            CREATE INDEX IF NOT EXISTS idx_all_tables_search_vector
+            ON "{target_schema}"."all_tables"
+            USING GIN(search_vector);
+        """
+
+        create_trigram_index_sql = f"""
+            CREATE INDEX IF NOT EXISTS idx_all_tables_dialogue_trigram
+            ON "{target_schema}"."all_tables"
+            USING GIN (content gin_trgm_ops);
+        """
+
+        create_unique_index_sql = f"""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_all_tables_unique
+            ON "{target_schema}"."all_tables" (block_id);
+        """
+
+        logging.info("Creating or refreshing materialized view 'all_tables'.")
+        with pg_conn.cursor() as cursor:
+            cursor.execute(create_view_sql)
+            cursor.execute(create_search_vector_index_sql)
+            cursor.execute(create_trigram_index_sql)
+            cursor.execute(create_unique_index_sql)
+            if new_data_exists:
+                cursor.execute(
+                    f"REFRESH MATERIALIZED VIEW CONCURRENTLY \"{target_schema}\".\"all_tables\";")
+            pg_conn.commit()
+
     finally:
         pg_conn.close()
 
