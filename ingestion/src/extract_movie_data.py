@@ -21,7 +21,7 @@ SCRIPTS_WEBSITE = "https://www.scriptslug.com"
 SCRIPTS_API_LINK = "https://www.scriptslug.com/gql"
 REFERER = "https://www.scriptslug.com/scripts/genre/{genre}?pg=50"
 
-VOLUME_FILE_PATH = f"{os.getenv('DATABRICKS_MOVIE_DATA_VOLUME_PATH')}/{{genre}}_movies.json"
+VOLUME_FILE_PATH = f"{os.getenv('DATABRICKS_MOVIE_DATA_VOLUME_PATH')}{{genre}}_movies.json"
 SCRIPT_PDF_PATH = os.path.join("/tmp", "{movie}.pdf")
 
 CHARACTER_LINE_RE = re.compile(r"^([A-Z0-9 '.-]+?)(?:\s*\(([^)]+)\))*$")

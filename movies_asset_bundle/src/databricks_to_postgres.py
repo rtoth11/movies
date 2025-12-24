@@ -97,6 +97,9 @@ def export_table_to_csvs(catalog, schema, table):
     df = df.filter(df["inserted_at"] > datetime.datetime.now() - datetime.timedelta(hours=1))
     csvs_path = os.path.join(TEMPORARY_CSVS_VOLUME_PATH, f"{table}_csv")
 
+    if len(df.head(1)) == 0:
+        return None, None
+
     logging.debug(f"Writing CSV to {csvs_path}.")
 
     df.write \
@@ -199,6 +202,10 @@ def export_schema_to_postgres(source_catalog,
 
             local_path_to_csvs, spark_schema = export_table_to_csvs(
                 source_catalog, source_schema, table)
+
+            if local_path_to_csvs is None:
+                logging.info(f"No new data to export for table: {table}. Skipping.")
+                continue
 
             s3_paths = []
 
