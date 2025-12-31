@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import logging
 import os
 
 from pyspark.dbutils import DBUtils
@@ -28,6 +29,7 @@ def main():
 
     if not os.path.exists(args.movie_data_volume_path) \
             or len(os.listdir(args.movie_data_volume_path)) == 0:
+        logging.info("No movie data found to process. Exiting.")
         return
 
     df = spark.read.option("multiline","true").json(f"{args.movie_data_volume_path}*")
@@ -59,4 +61,5 @@ def main():
 
 
 if __name__ == "__main__":
+    logging.getLogger().setLevel(logging.INFO)
     main()

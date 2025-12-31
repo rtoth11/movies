@@ -36,7 +36,11 @@ checked_script_pages = set()
 
 def _add_movie_data(movie_title: str, movie_year: str, script_data: list[dict]) -> dict:
     response = tmdb_search.movie(query=movie_title, year=movie_year)
-    candidate_movies = [movie for movie in response["results"] if movie["title"] == movie_title]
+    candidate_movies = [
+        movie for movie in response["results"]
+        if (movie["title"].replace(":", "").replace("-", "")
+            == movie_title.replace(":", "").replace("-", ""))
+    ]
 
     movie = tmdb.Movies(candidate_movies[0]["id"])
     cast = movie.credits()["cast"]
@@ -246,7 +250,11 @@ def _extract_script_from_pdf(pdf_path: str) -> list[dict]:
 def _should_process_movie(movie_title: str, movie_year: str, already_stored_movie_ids: set[int]) \
         -> bool:
     response = tmdb_search.movie(query=movie_title, year=movie_year)
-    candidate_movies = [movie for movie in response["results"] if movie["title"] == movie_title]
+    candidate_movies = [
+        movie for movie in response["results"]
+        if (movie["title"].replace(":", "").replace("-", "")
+            == movie_title.replace(":", "").replace("-", ""))
+    ]
 
     if len(candidate_movies) == 0:
         logging.debug(
@@ -296,14 +304,25 @@ def _extract_script_links(genre: str) -> list[tuple]:
         with requests.get(script_page_link) as script_page_response:
             soup = BeautifulSoup(script_page_response.content, "html.parser")
             link_element = soup.find("a", href=re.compile("live/pdf/scripts"))
-            title_element = soup.find(
+
+            main_title_element = soup.find(
                 "span", class_="text-3xl leading-normal md:text-4xl lg:text-5xl lg:leading-normal")
+            additional_title_element_type_one = soup.find(
+                "span", class_="text-3xl leading-normal md:text-3xl lg:text-4xl lg:leading-normal")
+            additional_title_element_type_two = soup.find(
+                "span", class_="text-2xl leading-normal md:text-3xl lg:text-4xl lg:leading-normal")
+            full_title = main_title_element.text.strip()
+            if additional_title_element_type_one is not None:
+                full_title += f" {additional_title_element_type_one.text.strip()}"
+            elif additional_title_element_type_two is not None:
+                full_title += f" {additional_title_element_type_two.text.strip()}"
+
             type_and_year_element = soup.find(
                 "p", class_="font-semibold text-slate-500 font-slab text-lg")
 
             if link_element is not None:
                 script_links.append((
-                    title_element.text.strip(),
+                    full_title,
                     type_and_year_element.text.split("-")[1].strip(),
                     link_element["href"]
                 ))

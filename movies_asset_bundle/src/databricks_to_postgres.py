@@ -189,8 +189,9 @@ def export_schema_to_postgres(source_catalog,
     )
 
     empty_volume(TEMPORARY_CSVS_VOLUME_PATH)
-
     delete_s3_files(s3_bucket, prefix)
+
+    new_data_exists = False
 
     try:
         with pg_conn.cursor() as cursor:
@@ -228,7 +229,76 @@ def export_schema_to_postgres(source_catalog,
                 os.remove(local_file_path)
             os.rmdir(local_path_to_csvs)
 
+            new_data_exists = True
             logging.info(f"Finished table: {table}.")
+
+        create_view_sql = f"""
+            CREATE MATERIALIZED VIEW IF NOT EXISTS "{target_schema}"."all_tables" AS
+
+            (SELECT
+                'dialogue' AS block_type,
+                d.id AS block_id,
+                d.movie_tmdb_id,
+                d.index_in_script,
+                d.dialogue AS content,
+                to_tsvector('english', d.dialogue) AS search_vector
+            FROM "{target_schema}"."gold_dialogues" d)
+            
+            UNION ALL
+            
+            (SELECT
+                'description',
+                id,
+                movie_tmdb_id,
+                index_in_script,
+                description,
+                to_tsvector('english', description)
+            FROM "{target_schema}"."gold_descriptions")
+            
+            UNION ALL
+
+            (SELECT
+                'scene',
+                id,
+                movie_tmdb_id,
+                index_in_script,
+                scene,
+                to_tsvector('english', scene)
+            FROM "{target_schema}"."gold_scenes")
+            
+            UNION ALL
+
+            (SELECT
+                'unknown',
+                id,
+                movie_tmdb_id,
+                index_in_script,
+                content,
+                to_tsvector('english', content)
+            FROM "{target_schema}"."gold_unknown_blocks");
+        """
+
+        create_index_sql = f"""
+            CREATE INDEX IF NOT EXISTS idx_all_tables_search_vector
+            ON "{target_schema}"."all_tables"
+            USING GIN(search_vector);
+        """
+
+        create_unique_index_sql = f"""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_all_tables_unique
+            ON "{target_schema}"."all_tables" (block_id);
+        """
+
+        logging.info("Creating or refreshing materialized view 'all_tables'.")
+        with pg_conn.cursor() as cursor:
+            cursor.execute(create_view_sql)
+            cursor.execute(create_index_sql)
+            cursor.execute(create_unique_index_sql)
+            if new_data_exists:
+                cursor.execute(
+                    f"REFRESH MATERIALIZED VIEW CONCURRENTLY \"{target_schema}\".\"all_tables\";")
+            pg_conn.commit()
+
     finally:
         pg_conn.close()
 
