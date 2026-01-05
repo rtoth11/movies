@@ -196,6 +196,7 @@ def export_schema_to_postgres(source_catalog,
     try:
         with pg_conn.cursor() as cursor:
             cursor.execute("CREATE EXTENSION IF NOT EXISTS aws_s3 CASCADE;")
+            cursor.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm CASCADE;")
             pg_conn.commit()
 
         for table in tables:
@@ -236,13 +237,18 @@ def export_schema_to_postgres(source_catalog,
             CREATE MATERIALIZED VIEW IF NOT EXISTS "{target_schema}"."all_tables" AS
 
             (SELECT
-                'dialogue' AS block_type,
+                'dialogue' AS type,
                 d.id AS block_id,
                 d.movie_tmdb_id,
                 d.index_in_script,
                 d.dialogue AS content,
+                d.suffix,
+                d.parentheticals,
+                c.id AS character_id,
+                c.name AS character,
                 to_tsvector('english', d.dialogue) AS search_vector
-            FROM "{target_schema}"."gold_dialogues" d)
+            FROM "{target_schema}"."gold_dialogues" d
+            JOIN "{target_schema}".gold_characters c ON d.character_id = c.id)
             
             UNION ALL
             
@@ -252,6 +258,10 @@ def export_schema_to_postgres(source_catalog,
                 movie_tmdb_id,
                 index_in_script,
                 description,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
                 to_tsvector('english', description)
             FROM "{target_schema}"."gold_descriptions")
             
@@ -263,6 +273,10 @@ def export_schema_to_postgres(source_catalog,
                 movie_tmdb_id,
                 index_in_script,
                 scene,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
                 to_tsvector('english', scene)
             FROM "{target_schema}"."gold_scenes")
             
@@ -274,14 +288,24 @@ def export_schema_to_postgres(source_catalog,
                 movie_tmdb_id,
                 index_in_script,
                 content,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
                 to_tsvector('english', content)
             FROM "{target_schema}"."gold_unknown_blocks");
         """
 
-        create_index_sql = f"""
+        create_search_vector_index_sql = f"""
             CREATE INDEX IF NOT EXISTS idx_all_tables_search_vector
             ON "{target_schema}"."all_tables"
             USING GIN(search_vector);
+        """
+
+        create_trigram_index_sql = f"""
+            CREATE INDEX IF NOT EXISTS idx_all_tables_dialogue_trigram
+            ON "{target_schema}"."all_tables"
+            USING GIN (content gin_trgm_ops);
         """
 
         create_unique_index_sql = f"""
@@ -292,7 +316,8 @@ def export_schema_to_postgres(source_catalog,
         logging.info("Creating or refreshing materialized view 'all_tables'.")
         with pg_conn.cursor() as cursor:
             cursor.execute(create_view_sql)
-            cursor.execute(create_index_sql)
+            cursor.execute(create_search_vector_index_sql)
+            cursor.execute(create_trigram_index_sql)
             cursor.execute(create_unique_index_sql)
             if new_data_exists:
                 cursor.execute(

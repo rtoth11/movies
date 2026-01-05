@@ -10,4 +10,4 @@ region = "us-east-1"
 ingestion_lambda_memory_size = 256
 ingestion_lambda_timeout = 900
 ingestion_event_rule_name = "ingestion-event-rule"
-ingestion_event_schedule_expression = "cron(0 12 * * ? *)"
+ingestion_event_schedule_expression = "cron(0 10 * * ? *)"
