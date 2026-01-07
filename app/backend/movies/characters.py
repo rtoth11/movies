@@ -6,7 +6,7 @@ from .db import query
 characters_bp = Blueprint("characters", __name__)
 
 
-@characters_bp.route("/characters/<string:character_id>")
+@characters_bp.route("/api/characters/<string:character_id>")
 def character_details(character_id):
     rows = query(f"""
         SELECT c.name, m.tmdb_id, m.title

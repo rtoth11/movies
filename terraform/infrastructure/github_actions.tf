@@ -3,12 +3,19 @@ resource "aws_ecr_repository" "ingestion_ecr_repository" {
   force_delete = true
 }
 
-resource "aws_iam_openid_connect_provider" "github_oidc_provider" {
-  url = "https://token.actions.githubusercontent.com"
+resource "aws_ecrpublic_repository" "backend_ecr_repository" {
+  repository_name = var.backend_ecr_repo_name
+  force_destroy = true
+}
 
-  client_id_list = [
-    "sts.amazonaws.com"
-  ]
+resource "aws_ecrpublic_repository" "frontend_ecr_repository" {
+  repository_name = var.frontend_ecr_repo_name
+  force_destroy = true
+}
+
+# Created in other workspace
+data "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
 }
 
 data "aws_iam_policy_document" "github_assume_role_policy_document" {
@@ -16,7 +23,7 @@ data "aws_iam_policy_document" "github_assume_role_policy_document" {
     effect = "Allow"
     principals {
       type = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github_oidc_provider.arn]
+      identifiers = [data.aws_iam_openid_connect_provider.github.arn]
     }
     actions = ["sts:AssumeRoleWithWebIdentity"]
     condition {
@@ -75,6 +82,48 @@ resource "aws_iam_role_policy_attachment" "attach_ecr_to_github_role" {
   policy_arn = aws_iam_policy.ecr_policy.arn
 }
 
+data "aws_iam_policy_document" "ecr_public_policy_document" {
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ecr-public:GetAuthorizationToken",
+      "sts:GetServiceBearerToken"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ecr-public:BatchCheckLayerAvailability",
+      "ecr-public:CompleteLayerUpload",
+      "ecr-public:InitiateLayerUpload",
+      "ecr-public:PutImage",
+      "ecr-public:UploadLayerPart",
+      "ecr-public:DescribeImages",
+      "ecr-public:GetRepositoryPolicy",
+      "ecr-public:SetRepositoryPolicy"
+    ]
+
+    resources = [
+      aws_ecrpublic_repository.backend_ecr_repository.arn,
+      aws_ecrpublic_repository.frontend_ecr_repository.arn
+    ]
+  }
+}
+
+resource "aws_iam_policy" "ecr_public_policy" {
+  name   = "ecr-public-policy"
+  policy = data.aws_iam_policy_document.ecr_public_policy_document.json
+}
+
+resource "aws_iam_role_policy_attachment" "attach_ecr_public_to_github_role" {
+  role       = aws_iam_role.github_actions_role.name
+  policy_arn = aws_iam_policy.ecr_public_policy.arn
+}
+
 data "aws_iam_policy_document" "lambda_update_function_policy_document" {
   statement {
     effect = "Allow"
@@ -84,6 +133,7 @@ data "aws_iam_policy_document" "lambda_update_function_policy_document" {
       "lambda:UpdateFunctionConfiguration",
       "lambda:GetFunctionConfiguration"
     ]
+
     resources = [
       aws_lambda_function.ingestion_lambda.arn
     ]
@@ -98,4 +148,31 @@ resource "aws_iam_policy" "lambda_update_function_policy" {
 resource "aws_iam_role_policy_attachment" "attach_lambda_update_function_to_github_role" {
   role       = aws_iam_role.github_actions_role.name
   policy_arn = aws_iam_policy.lambda_update_function_policy.arn
+}
+
+data "aws_iam_policy_document" "update_ecs_task_definition_policy_document" {
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ecs:DescribeClusters",
+      "ecs:DescribeTaskDefinition",
+      "ecs:DescribeServices",
+      "ecs:RegisterTaskDefinition",
+      "ecs:UpdateService",
+      "iam:PassRole"
+    ]
+
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_policy" "update_ecs_task_definition_policy" {
+  name   = "update-ecs-task-definition-policy"
+  policy = data.aws_iam_policy_document.update_ecs_task_definition_policy_document.json
+}
+
+resource "aws_iam_role_policy_attachment" "attach_update_ecs_task_definition_to_github_role" {
+  role       = aws_iam_role.github_actions_role.name
+  policy_arn = aws_iam_policy.update_ecs_task_definition_policy.arn
 }

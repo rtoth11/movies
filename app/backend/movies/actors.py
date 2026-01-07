@@ -6,7 +6,7 @@ from .db import query
 actors_bp = Blueprint("actors", __name__)
 
 
-@actors_bp.route("/actors/<int:tmdb_id>")
+@actors_bp.route("/api/actors/<int:tmdb_id>")
 def actor_details(tmdb_id):
     actor = query(
         f'SELECT tmdb_id, name FROM "{SCHEMA_NAME}"."gold_actors" WHERE tmdb_id=%s',

@@ -1,4 +1,6 @@
 ingestion_ecr_repo_name = "movies-ingestion-repo"
+backend_ecr_repo_name = "movies-backend-repo"
+frontend_ecr_repo_name = "movies-frontend-repo"
 github_repo = "rtoth11/movies"
 github_role_name = "github-actions-role"
 github_role_path = "/movies/"
@@ -11,3 +13,7 @@ ingestion_lambda_memory_size = 256
 ingestion_lambda_timeout = 900
 ingestion_event_rule_name = "ingestion-event-rule"
 ingestion_event_schedule_expression = "cron(0 10 * * ? *)"
+backend_cpu = 256
+backend_memory = 512
+frontend_cpu = 256
+frontend_memory = 512

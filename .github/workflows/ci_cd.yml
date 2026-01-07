@@ -61,13 +61,11 @@ jobs:
         run: |
           poetry run pytest --cov=src --cov-report=term-missing
 
-  permissions_for_hcp_terraform:
+  permissions_for_github_actions:
     runs-on: ubuntu-latest
-    name: "Permissions for HCP Terraform"
+    name: "Permissions for Github Actions"
     outputs:
-      hcp_terraform_infrastructure_organization: ${{ steps.set_outputs.outputs.hcp_terraform_infrastructure_organization }}
-      hcp_terraform_infrastructure_workspace_name: ${{ steps.set_outputs.outputs.hcp_terraform_infrastructure_workspace_name }}
-      hcp_terraform_role_arn: ${{ steps.set_outputs.outputs.hcp_terraform_role_arn }}
+      github_actions_role_for_infrastructure_arn: ${{ steps.set_outputs.outputs.github_actions_role_for_infrastructure_arn }}
     steps:
       - name: Checkout code for next step
         uses: actions/checkout@v4
@@ -88,203 +86,66 @@ jobs:
           terraform_wrapper: false
 
       - name: Terraform Init
-        working-directory: "./terraform/permissions_for_hcp_terraform"
+        working-directory: "./terraform/permissions_for_github_actions"
         run: terraform init
 
       - name: Terraform Plan
-        working-directory: "./terraform/permissions_for_hcp_terraform"
+        working-directory: "./terraform/permissions_for_github_actions"
         run: terraform plan
 
       - name: Terraform Apply
-        id: apply_permissions_for_hcp_terraform
+        id: apply_permissions_for_github_actions
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        working-directory: "./terraform/permissions_for_hcp_terraform"
+        working-directory: "./terraform/permissions_for_github_actions"
         run: terraform apply -auto-approve
 
       - name: Set outputs
         id: set_outputs
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        working-directory: "./terraform/permissions_for_hcp_terraform"
+        working-directory: "./terraform/permissions_for_github_actions"
         run: |
-          hcp_terraform_infrastructure_organization=$(terraform output -raw hcp_terraform_infrastructure_organization)
-          hcp_terraform_infrastructure_workspace_name=$(terraform output -raw hcp_terraform_infrastructure_workspace_name)
-          hcp_terraform_role_arn=$(terraform output -raw hcp_terraform_role_arn)
-
-          echo "hcp_terraform_infrastructure_organization=${hcp_terraform_infrastructure_organization}" >> $GITHUB_OUTPUT
-          echo "hcp_terraform_infrastructure_workspace_name=${hcp_terraform_infrastructure_workspace_name}" >> $GITHUB_OUTPUT
-          echo "hcp_terraform_role_arn=${hcp_terraform_role_arn}" >> $GITHUB_OUTPUT
+          echo "github_actions_role_for_infrastructure_arn=$(terraform output -raw github_actions_role_for_infrastructure_arn)" >> $GITHUB_OUTPUT
 
   terraform_infrastructure:
-    needs: permissions_for_hcp_terraform
+    needs: permissions_for_github_actions
     runs-on: ubuntu-latest
     name: "Terraform Infrastructure"
     outputs:
       ingestion_ecr_repository_url: ${{ steps.set_outputs.outputs.ingestion_ecr_repository_url }}
+      backend_ecr_repository_url: ${{ steps.set_outputs.outputs.backend_ecr_repository_url }}
+      frontend_ecr_repository_url: ${{ steps.set_outputs.outputs.frontend_ecr_repository_url }}
       github_actions_role_arn: ${{ steps.set_outputs.outputs.github_actions_role_arn }}
       ingestion_lambda_function_name: ${{ steps.set_outputs.outputs.ingestion_lambda_function_name }}
       movies_s3_bucket_name: ${{ steps.set_outputs.outputs.movies_s3_bucket_name }}
       pg_port: ${{ steps.set_outputs.outputs.pg_port }}
+      alb_url: ${{ steps.set_outputs.outputs.alb_url }}
+      ecs_cluster_name: ${{ steps.set_outputs.outputs.ecs_cluster_name }}
+      backend_ecs_task_definition_family: ${{ steps.set_outputs.outputs.backend_ecs_task_definition_family }}
+      frontend_ecs_task_definition_family: ${{ steps.set_outputs.outputs.frontend_ecs_task_definition_family }}
+      backend_ecs_service_name: ${{ steps.set_outputs.outputs.backend_ecs_service_name }}
+      frontend_ecs_service_name: ${{ steps.set_outputs.outputs.frontend_ecs_service_name }}
     steps:
       - name: Checkout code for next step
         uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ needs.permissions_for_github_actions.outputs.github_actions_role_for_infrastructure_arn }}
+          aws-region: us-east-1
+          mask-aws-account-id: false
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
-      - name: Get infrastructure workspace ID
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          WORKSPACE_ID=$(curl \
-            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
-            --header "Content-Type: application/vnd.api+json" \
-            --request GET \
-            "https://app.terraform.io/api/v2/organizations/${{ needs.permissions_for_hcp_terraform.outputs.hcp_terraform_infrastructure_organization }}/workspaces/${{ needs.permissions_for_hcp_terraform.outputs.hcp_terraform_infrastructure_workspace_name }}" \
-            | jq -r '.data.id')
-          echo "WORKSPACE_ID=$WORKSPACE_ID" >> $GITHUB_ENV
-
-      - name: Check if TFC_AWS_PROVIDER_AUTH variable exists
-        id: check_variable
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          VARIABLE_ID=$(curl \
-            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
-            --header "Content-Type: application/vnd.api+json" \
-            --request GET \
-            "https://app.terraform.io/api/v2/workspaces/${{ env.WORKSPACE_ID }}/vars" \
-            | jq -r '.data[] | select(.attributes.key=="TFC_AWS_PROVIDER_AUTH") | .id')
-          echo "VARIABLE_ID=$VARIABLE_ID" >> $GITHUB_ENV
-
-      - name: Set TFC_AWS_PROVIDER_AUTH
-        if: >-
-          ${{ github.event_name == 'push' &&
-              github.ref == 'refs/heads/main' &&
-              (env.VARIABLE_ID || '') == '' }}
-        run: |
-          curl \
-            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
-            --header "Content-Type: application/vnd.api+json" \
-            --request POST \
-            --data '{
-              "data": {
-                "type":"vars",
-                "attributes": {
-                  "key":"TFC_AWS_PROVIDER_AUTH",
-                  "value":"true",
-                  "category":"env",
-                  "hcl":false,
-                  "sensitive":false
-                },
-                "relationships": {
-                  "workspace": {
-                    "data": {
-                      "type": "workspaces",
-                      "id": "'"${{ env.WORKSPACE_ID }}"'"
-                    }
-                  }
-                }
-              }
-            }' \
-            https://app.terraform.io/api/v2/vars
-
-      - name: Update TFC_AWS_PROVIDER_AUTH
-        if: >-
-          ${{ github.event_name == 'push' &&
-              github.ref == 'refs/heads/main' &&
-              (env.VARIABLE_ID || '') != '' }}
-        run: |
-          curl \
-            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
-            --header "Content-Type: application/vnd.api+json" \
-            --request PATCH \
-            --data '{
-              "data": {
-                "type":"vars",
-                "id":"'"${{ env.VARIABLE_ID }}"'",
-                "attributes": {
-                  "key":"TFC_AWS_PROVIDER_AUTH",
-                  "value":"true",
-                  "category":"env",
-                  "hcl":false,
-                  "sensitive":false
-                }
-              }
-            }' \
-            https://app.terraform.io/api/v2/vars/"${{ env.VARIABLE_ID }}"
-
-      - name: Check if TFC_AWS_RUN_ROLE_ARN variable exists
-        id: check_variable_run_role
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          VARIABLE_ID_RUN_ROLE=$(curl \
-            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
-            --header "Content-Type: application/vnd.api+json" \
-            --request GET \
-            "https://app.terraform.io/api/v2/workspaces/${{ env.WORKSPACE_ID }}/vars" \
-            | jq -r '.data[] | select(.attributes.key=="TFC_AWS_RUN_ROLE_ARN") | .id')
-          echo "VARIABLE_ID_RUN_ROLE=$VARIABLE_ID_RUN_ROLE" >> $GITHUB_ENV
-
-      - name: Set TFC_AWS_RUN_ROLE_ARN
-        if: >-
-          ${{ github.event_name == 'push' &&
-              github.ref == 'refs/heads/main' &&
-              (env.VARIABLE_ID_RUN_ROLE || '') == '' }}
-        run: |
-          curl \
-            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
-            --header "Content-Type: application/vnd.api+json" \
-            --request POST \
-            --data '{
-              "data": {
-                "type":"vars",
-                "attributes": {
-                  "key":"TFC_AWS_RUN_ROLE_ARN",
-                  "value":"'"${{ needs.permissions_for_hcp_terraform.outputs.hcp_terraform_role_arn }}"'",
-                  "category":"env",
-                  "hcl":false,
-                  "sensitive":false
-                },
-                "relationships": {
-                  "workspace": {
-                    "data": {
-                      "type": "workspaces",
-                      "id": "'"${{ env.WORKSPACE_ID }}"'"
-                    }
-                  }
-                }
-              }
-            }' \
-            https://app.terraform.io/api/v2/vars
-
-      - name: Update TFC_AWS_RUN_ROLE_ARN
-        if: >-
-          ${{ github.event_name == 'push' &&
-              github.ref == 'refs/heads/main' &&
-              (env.VARIABLE_ID_RUN_ROLE || '') != '' }}
-        run: |
-          curl \
-            --header "Authorization: Bearer ${{ secrets.TF_API_TOKEN }}" \
-            --header "Content-Type: application/vnd.api+json" \
-            --request PATCH \
-            --data '{
-              "data": {
-                "type":"vars",
-                "id":"'"${{ env.VARIABLE_ID_RUN_ROLE }}"'",
-                "attributes": {
-                  "key":"TFC_AWS_RUN_ROLE_ARN",
-                  "value":"'"${{ needs.permissions_for_hcp_terraform.outputs.hcp_terraform_role_arn }}"'",
-                  "category":"env",
-                  "hcl":false,
-                  "sensitive":false
-                }
-              }
-            }' \
-            https://app.terraform.io/api/v2/vars/"${{ env.VARIABLE_ID_RUN_ROLE }}"
-
       - name: Terraform Init
         working-directory: "./terraform/infrastructure"
         run: terraform init
+
+      - name: Terraform Get
+        working-directory: "./terraform/infrastructure"
+        run: terraform get
 
       - name: Terraform Plan
         working-directory: "./terraform/infrastructure"
@@ -315,6 +176,8 @@ jobs:
         working-directory: "./terraform/infrastructure"
         run: |
           echo "ingestion_ecr_repository_url=$(terraform output -raw ingestion_ecr_repository_url)" >> $GITHUB_OUTPUT
+          echo "backend_ecr_repository_url=$(terraform output -raw backend_ecr_repository_url)" >> $GITHUB_OUTPUT
+          echo "frontend_ecr_repository_url=$(terraform output -raw frontend_ecr_repository_url)" >> $GITHUB_OUTPUT
           echo "github_actions_role_arn=$(terraform output -raw github_actions_role_arn)" >> $GITHUB_OUTPUT
           echo "ingestion_lambda_function_name=$(terraform output -raw ingestion_lambda_function_name)" >> $GITHUB_OUTPUT
           echo "movies_s3_bucket_name=$(terraform output -raw movies_s3_bucket_name)" >> $GITHUB_OUTPUT
@@ -322,9 +185,15 @@ jobs:
           PG_HOST=$(terraform output -raw pg_host)
           echo "::add-mask::$PG_HOST"
           databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_host","string_value":"'"$PG_HOST"'"}'
+          echo "alb_url=$(terraform output -raw alb_url)" >> $GITHUB_OUTPUT
+          echo "ecs_cluster_name=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
+          echo "backend_ecs_task_definition_family=$(terraform output -raw backend_ecs_task_definition_family)" >> $GITHUB_OUTPUT
+          echo "frontend_ecs_task_definition_family=$(terraform output -raw frontend_ecs_task_definition_family)" >> $GITHUB_OUTPUT
+          echo "backend_ecs_service_name=$(terraform output -raw backend_ecs_service_name)" >> $GITHUB_OUTPUT
+          echo "frontend_ecs_service_name=$(terraform output -raw frontend_ecs_service_name)" >> $GITHUB_OUTPUT
 
   build:
-    needs: [permissions_for_hcp_terraform, terraform_infrastructure]
+    needs: [permissions_for_github_actions, terraform_infrastructure]
     if: >
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'
@@ -333,9 +202,17 @@ jobs:
       - name: Checkout code for next step
         uses: actions/checkout@v4
 
-      - name: Read version from file
-        id: get_version
-        run: echo "VERSION=$(cat ingestion/VERSION)" >> $GITHUB_ENV
+      - name: Read ingestion version from file
+        id: get_ingestion_version
+        run: echo "INGESTION_VERSION=$(cat ingestion/VERSION)" >> $GITHUB_ENV
+
+      - name: Read backend version from file
+        id: get_backend_version
+        run: echo "BACKEND_VERSION=$(cat app/backend/VERSION)" >> $GITHUB_ENV
+
+      - name: Read frontend version from file
+        id: get_frontend_version
+        run: echo "FRONTEND_VERSION=$(cat app/frontend/VERSION)" >> $GITHUB_ENV
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -347,27 +224,67 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set image tags
-        id: set_tags
+      - name: Login to Amazon ECR Public
+        id: login-ecr-public
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
+
+      - name: Set ingestion image tags
+        id: set_ingestion_tags
         run: |
-          TAGS="${{ needs.terraform_infrastructure.outputs.ingestion_ecr_repository_url }}:${VERSION}"
-          TAGS="$TAGS,${{ needs.terraform_infrastructure.outputs.ingestion_ecr_repository_url }}:latest"
-          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+          INGESTION_TAGS="${{ needs.terraform_infrastructure.outputs.ingestion_ecr_repository_url }}:${INGESTION_VERSION}"
+          INGESTION_TAGS="$INGESTION_TAGS,${{ needs.terraform_infrastructure.outputs.ingestion_ecr_repository_url }}:latest"
+          echo "ingestion_tags=$INGESTION_TAGS" >> $GITHUB_OUTPUT
+
+      - name: Set backend image tags
+        id: set_backend_tags
+        run: |
+          BACKEND_TAGS="${{ needs.terraform_infrastructure.outputs.backend_ecr_repository_url }}:${BACKEND_VERSION}"
+          BACKEND_TAGS="$BACKEND_TAGS,${{ needs.terraform_infrastructure.outputs.backend_ecr_repository_url }}:latest"
+          echo "backend_tags=$BACKEND_TAGS" >> $GITHUB_OUTPUT
+
+      - name: Set frontend image tags
+        id: set_frontend_tags
+        run: |
+          FRONTEND_TAGS="${{ needs.terraform_infrastructure.outputs.frontend_ecr_repository_url }}:${FRONTEND_VERSION}"
+          FRONTEND_TAGS="$FRONTEND_TAGS,${{ needs.terraform_infrastructure.outputs.frontend_ecr_repository_url }}:latest"
+          echo "frontend_tags=$FRONTEND_TAGS" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push
+      - name: Build and push ingestion image to ECR
         uses: docker/build-push-action@v6
         with:
           context: ./ingestion
           file: ./ingestion/Dockerfile
           push: true
-          tags: ${{ steps.set_tags.outputs.tags }}
+          tags: ${{ steps.set_ingestion_tags.outputs.ingestion_tags }}
           provenance: false
           platforms: linux/arm64
           build-args: |
             DATABRICKS_MOVIE_DATA_VOLUME_PATH=${{ vars.DATABRICKS_MOVIE_DATA_VOLUME_PATH }}
+
+      - name: Build and push backend image to ECR
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app/backend
+          file: ./app/backend/Dockerfile
+          push: true
+          tags: ${{ steps.set_backend_tags.outputs.backend_tags }}
+          provenance: false
+          platforms: linux/amd64
+
+      - name: Build and push frontend image to ECR
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app/frontend
+          file: ./app/frontend/Dockerfile
+          push: true
+          tags: ${{ steps.set_frontend_tags.outputs.frontend_tags }}
+          provenance: false
+          platforms: linux/amd64
 
       - name: Update Lambda function
         run: |
@@ -407,8 +324,93 @@ jobs:
             --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }} \
             --environment "Variables={TMDB_API_KEY=$TMDB_API_KEY,DATABRICKS_HOST=$DATABRICKS_HOST,DATABRICKS_TOKEN=$DATABRICKS_TOKEN,PG_HOST=$PG_HOST,PG_PORT=$PG_PORT,PG_DATABASE=$PG_DATABASE,PG_USER=$PG_USER,PG_PASSWORD=$PG_PASSWORD}"
 
+      - name: Wait for Lambda configuration update to finish
+        run: |
+          aws lambda wait function-updated \
+            --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }}
+
+      - name: Wait for backend service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ needs.terraform_infrastructure.outputs.ecs_cluster_name }} \
+            --services ${{ needs.terraform_infrastructure.outputs.backend_ecs_service_name }}
+
+      - name: Update image of backend ECS task
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ needs.terraform_infrastructure.outputs.backend_ecs_task_definition_family }} \
+            --query taskDefinition \
+          | jq '
+            del(
+            .taskDefinitionArn,
+            .revision,
+            .status,
+            .requiresAttributes,
+            .compatibilities,
+            .registeredAt,
+            .registeredBy
+            )
+            | .containerDefinitions[0].image = "'"${{ needs.terraform_infrastructure.outputs.backend_ecr_repository_url }}:latest"'"
+          ' > updated-task-def.json
+  
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://updated-task-def.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          aws ecs update-service \
+            --cluster ${{ needs.terraform_infrastructure.outputs.ecs_cluster_name }} \
+            --service ${{ needs.terraform_infrastructure.outputs.backend_ecs_service_name }} \
+            --task-definition $TASK_DEF_ARN
+
+      - name: Wait for backend service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ needs.terraform_infrastructure.outputs.ecs_cluster_name }} \
+            --services ${{ needs.terraform_infrastructure.outputs.backend_ecs_service_name }}
+
+      - name: Wait for frontend service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ needs.terraform_infrastructure.outputs.ecs_cluster_name }} \
+            --services ${{ needs.terraform_infrastructure.outputs.frontend_ecs_service_name }}
+
+      - name: Update image of frontend ECS task
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ needs.terraform_infrastructure.outputs.frontend_ecs_task_definition_family }} \
+            --query taskDefinition \
+          | jq '
+            del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy
+            )
+            | .containerDefinitions[0].image = "'"${{ needs.terraform_infrastructure.outputs.frontend_ecr_repository_url }}:latest"'"
+          ' > updated-task-def.json
+
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://updated-task-def.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          aws ecs update-service \
+            --cluster ${{ needs.terraform_infrastructure.outputs.ecs_cluster_name }} \
+            --service ${{ needs.terraform_infrastructure.outputs.frontend_ecs_service_name }} \
+            --task-definition $TASK_DEF_ARN
+
+      - name: Wait for frontend service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ needs.terraform_infrastructure.outputs.ecs_cluster_name }} \
+            --services ${{ needs.terraform_infrastructure.outputs.frontend_ecs_service_name }}
+
   deploy_asset_bundle:
-    needs: [permissions_for_hcp_terraform, terraform_infrastructure]
+    needs: [permissions_for_github_actions, terraform_infrastructure]
     if: >
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main'

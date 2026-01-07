@@ -16,6 +16,10 @@ def create_app():
 
     CORS(app)
 
+    @app.route("/api/health")
+    def health():
+        return "ok", 200
+
     return app
 
 
