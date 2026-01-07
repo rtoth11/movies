@@ -131,7 +131,7 @@ jobs:
       backend_ecs_task_definition_family: ${{ steps.set_outputs.outputs.backend_ecs_task_definition_family }}
       frontend_ecs_task_definition_family: ${{ steps.set_outputs.outputs.frontend_ecs_task_definition_family }}
       backend_ecs_service_name: ${{ steps.set_outputs.outputs.backend_ecs_service_name }}
-      frontend_ecs_service_name: ${{ steps.set_outputs.outputs.frontend_ecs_service_name
+      frontend_ecs_service_name: ${{ steps.set_outputs.outputs.frontend_ecs_service_name }}
     steps:
       - name: Checkout code for next step
         uses: actions/checkout@v4
@@ -401,7 +401,7 @@ jobs:
           context: ./ingestion
           file: ./ingestion/Dockerfile
           push: true
-          tags: ${{ steps.set_tags.outputs.ingestion_tags }}
+          tags: ${{ steps.set_ingestion_tags.outputs.ingestion_tags }}
           provenance: false
           platforms: linux/arm64
           build-args: |
@@ -486,6 +486,12 @@ jobs:
             --service ${{ needs.terraform_infrastructure.outputs.backend_ecs_service_name }} \
             --force-new-deployment
 
+      - name: Wait for backend service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ needs.terraform_infrastructure.outputs.ecs_cluster_name }} \
+            --services ${{ needs.terraform_infrastructure.outputs.backend_ecs_service_name }}
+
       - name: Update image of frontend ECS task
         run: |
           aws ecs describe-task-definition \
@@ -501,6 +507,12 @@ jobs:
             --cluster ${{ needs.terraform_infrastructure.outputs.ecs_cluster_name }} \
             --service ${{ needs.terraform_infrastructure.outputs.frontend_ecs_service_name }} \
             --force-new-deployment
+
+      - name: Wait for frontend service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ needs.terraform_infrastructure.outputs.ecs_cluster_name }} \
+            --services ${{ needs.terraform_infrastructure.outputs.frontend_ecs_service_name }}
 
   deploy_asset_bundle:
     needs: [permissions_for_hcp_terraform, terraform_infrastructure]
