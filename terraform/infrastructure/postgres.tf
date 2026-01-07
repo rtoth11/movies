@@ -25,7 +25,7 @@ resource "aws_subnet" "public" {
   availability_zone       = var.azs[count.index]
   map_public_ip_on_launch = true
   tags = {
-    Name = "postgres-subnet-${count.index + 1}"
+    Name = "public-subnet-${count.index + 1}"
   }
 }
 

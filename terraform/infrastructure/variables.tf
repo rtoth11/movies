@@ -3,6 +3,16 @@ variable ingestion_ecr_repo_name {
   type        = string
 }
 
+variable backend_ecr_repo_name {
+  description = "Name for the backend ECR repository"
+  type        = string
+}
+
+variable frontend_ecr_repo_name {
+  description = "Name for the frontend ECR repository"
+  type        = string
+}
+
 variable github_repo {
   description = "GitHub repository in the format 'owner/repo'"
   type        = string
@@ -78,4 +88,24 @@ variable pg_password {
   description = "Password for the PostgreSQL database"
   type        = string
   sensitive   = true
+}
+
+variable "backend_cpu" {
+  description = "CPU units for the backend ECS task"
+  type        = number
+}
+
+variable "backend_memory" {
+  description = "Memory (in MiB) for the backend ECS task"
+  type        = number
+}
+
+variable "frontend_cpu" {
+  description = "CPU units for the frontend ECS task"
+  type        = number
+}
+
+variable "frontend_memory" {
+  description = "Memory (in MiB) for the frontend ECS task"
+  type        = number
 }

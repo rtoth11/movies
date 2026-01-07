@@ -3,6 +3,16 @@ resource "aws_ecr_repository" "ingestion_ecr_repository" {
   force_delete = true
 }
 
+resource "aws_ecrpublic_repository" "backend_ecr_repository" {
+  repository_name = "var.backend_ecr_repo_name"
+  force_destroy = true
+}
+
+resource "aws_ecrpublic_repository" "frontend_ecr_repository" {
+  repository_name = "var.frontend_ecr_repo_name"
+  force_destroy = true
+}
+
 resource "aws_iam_openid_connect_provider" "github_oidc_provider" {
   url = "https://token.actions.githubusercontent.com"
 
