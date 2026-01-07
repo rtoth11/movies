@@ -30,4 +30,8 @@ onMounted(async () => {
       </li>
     </ul>
   </div>
+
+  <div v-else>
+    Loading...
+  </div>
 </template>

@@ -2,6 +2,8 @@ import os
 
 from psycopg2.pool import SimpleConnectionPool
 
+from . import SCHEMA_NAME
+
 PG_HOST = os.getenv("PG_HOST")
 PG_PORT = os.getenv("PG_PORT")
 PG_DB = os.getenv("PG_DATABASE")
@@ -16,7 +18,7 @@ pool = SimpleConnectionPool(
     dbname=PG_DB,
     user=PG_USER,
     password=PG_PASSWORD,
-    options='-c search_path=default'
+    options=f"-c search_path={SCHEMA_NAME}"
 )
 
 

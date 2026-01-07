@@ -30,7 +30,7 @@ const search = async () => {
   <div>
     <h1>Movie Search</h1>
 
-    <input v-model="q" placeholder="Search scripts…" />
+    <input v-model="q" placeholder="Search movies…" />
 
     <div>
       <label v-for="(v, k) in types" :key="k">
