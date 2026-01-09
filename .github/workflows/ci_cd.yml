@@ -101,11 +101,9 @@ jobs:
 
       - name: Set outputs
         id: set_outputs
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: "./terraform/permissions_for_github_actions"
         run: |
-          github_actions_role_for_infrastructure_arn=$(terraform output -raw github_actions_role_for_infrastructure_arn)
-          echo "github_actions_role_for_infrastructure_arn=${github_actions_role_for_infrastructure_arn}" >> $GITHUB_OUTPUT
+          echo "github_actions_role_for_infrastructure_arn=$(terraform output -raw github_actions_role_for_infrastructure_arn)" >> $GITHUB_OUTPUT
 
   terraform_infrastructure:
     needs: permissions_for_github_actions
@@ -132,9 +130,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: ${{ needs.permissions_for_github_actions.outputs.github_actions_role_for_infrastructure_arn }}
           aws-region: us-east-1
-          mask-aws-account-id: false
+          role-to-assume: ${{ needs.permissions_for_github_actions.outputs.github_actions_role_for_infrastructure_arn }}
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
