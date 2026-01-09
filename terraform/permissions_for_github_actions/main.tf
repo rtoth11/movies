@@ -3,53 +3,36 @@ provider "aws" {
   #profile = ""
 }
 
-data "tls_certificate" "hcp_terraform_tls_cert_provider" {
-  url = "https://app.terraform.io"
-}
-
-resource "aws_iam_openid_connect_provider" "hcp_terraform_oidc_provider" {
-  url = "https://app.terraform.io"
+resource "aws_iam_openid_connect_provider" "github_oidc_provider" {
+  url = "https://token.actions.githubusercontent.com"
 
   client_id_list = [
-    "aws.workload.identity"
-  ]
-
-  thumbprint_list = [
-    data.tls_certificate.hcp_terraform_tls_cert_provider.certificates[0].sha1_fingerprint
+    "sts.amazonaws.com"
   ]
 }
 
-data "aws_iam_policy_document" "hcp_terraform_assume_role_policy_document" {
+data "aws_iam_policy_document" "github_assume_role_policy_document" {
   statement {
     effect = "Allow"
-
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-
     principals {
       type = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.hcp_terraform_oidc_provider.arn]
+      identifiers = [aws_iam_openid_connect_provider.github_oidc_provider.arn]
     }
-
-    condition {
-      test     = "StringEquals"
-      variable = "app.terraform.io:aud"
-      values   = ["aws.workload.identity"]
-    }
-
+    actions = ["sts:AssumeRoleWithWebIdentity"]
     condition {
       test     = "StringLike"
-      variable = "app.terraform.io:sub"
-      values   = [
-        "organization:${local.hcp_terraform_infrastructure_organization}:project:${local.hcp_terraform_infrastructure_project}:workspace:${local.hcp_terraform_infrastructure_workspace_name}:run_phase:*"
+      variable = "token.actions.githubusercontent.com:sub"
+      values = [
+        "repo:${var.github_repo}:*"
       ]
     }
   }
 }
 
-resource "aws_iam_role" "hcp_terraform_role" {
-  name               = var.hcp_terraform_role_name
-  assume_role_policy = data.aws_iam_policy_document.hcp_terraform_assume_role_policy_document.json
-  path               = var.hcp_terraform_role_path
+resource "aws_iam_role" "github_actions_role" {
+  name               = var.github_role_name
+  assume_role_policy = data.aws_iam_policy_document.github_assume_role_policy_document.json
+  path               = var.github_role_path
 }
 
 data "aws_caller_identity" "current" {}
@@ -117,6 +100,7 @@ data "aws_iam_policy_document" "terraform_policy_document" {
       "ec2:RevokeSecurityGroupEgress",
       "ec2:DescribeNetworkInterfaces",
       "ec2:DescribeAvailabilityZones",
+      "ec2:DescribeAccountAttributes",
       "rds:CreateDBInstance",
       "rds:ModifyDBInstance",
       "rds:DeleteDBInstance",
@@ -128,7 +112,18 @@ data "aws_iam_policy_document" "terraform_policy_document" {
       "rds:AddTagsToResource",
       "rds:RemoveTagsFromResource",
       "rds:AddRoleToDBInstance",
-      "rds:RemoveRoleFromDBInstance"
+      "rds:RemoveRoleFromDBInstance",
+      "elasticloadbalancing:DescribeTargetGroups",
+      "elasticloadbalancing:DescribeTargetGroupAttributes",
+      "elasticloadbalancing:DescribeTags",
+      "elasticloadbalancing:DescribeLoadBalancers",
+      "elasticloadbalancing:DescribeLoadBalancerAttributes",
+      "elasticloadbalancing:DescribeListeners",
+      "elasticloadbalancing:DescribeListenerAttributes",
+      "elasticloadbalancing:DescribeRules",
+      "ecs:ListClusters",
+      "ecs:DescribeClusters",
+      "ecr-public:DescribeRepositories"
     ]
     resources = ["*"]
   }
@@ -175,11 +170,25 @@ data "aws_iam_policy_document" "terraform_policy_document" {
       "iam:GetPolicyVersion",
       "iam:ListPolicyVersions",
       "iam:CreatePolicyVersion",
-      "iam:DeletePolicyVersion",
+      "iam:DeletePolicyVersion"
     ]
 
     resources = [
       "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/*"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "iam:GetPolicy",
+      "iam:GetPolicyVersion",
+      "iam:ListPolicyVersions"
+    ]
+
+    resources = [
+      "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
     ]
   }
 
@@ -228,6 +237,109 @@ data "aws_iam_policy_document" "terraform_policy_document" {
       "arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:*"
     ]
   }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ecs:RegisterTaskDefinition",
+      "ecs:DescribeTaskDefinition",
+      "ecs:DeregisterTaskDefinition"
+    ]
+
+    resources = [
+      "arn:aws:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:task-definition/*"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ecs:CreateCluster",
+      "ecs:DeleteCluster"
+    ]
+
+    resources = [
+      "arn:aws:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:cluster/*"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ecr-public:CreateRepository",
+      "ecr-public:DeleteRepository",
+      "ecr-public:GetRepositoryCatalogData",
+      "ecr-public:ListTagsForResource",
+      "ecr-public:TagResource"
+    ]
+
+    resources = [
+      "arn:aws:ecr-public::${data.aws_caller_identity.current.account_id}:repository/*"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "elasticloadbalancing:CreateLoadBalancer",
+      "elasticloadbalancing:DeleteLoadBalancer",
+      "elasticloadbalancing:ModifyLoadBalancerAttributes",
+      "elasticloadbalancing:CreateListener",
+      "elasticloadbalancing:DeleteListener",
+      "elasticloadbalancing:ModifyListener"
+    ]
+
+    resources = [
+      "arn:aws:elasticloadbalancing:${var.region}:${data.aws_caller_identity.current.account_id}:loadbalancer/*"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "elasticloadbalancing:CreateTargetGroup",
+      "elasticloadbalancing:DeleteTargetGroup",
+      "elasticloadbalancing:RegisterTargets",
+      "elasticloadbalancing:DeregisterTargets",
+      "elasticloadbalancing:ModifyTargetGroupAttributes"
+    ]
+
+    resources = [
+      "arn:aws:elasticloadbalancing:${var.region}:${data.aws_caller_identity.current.account_id}:targetgroup/*"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "elasticloadbalancing:DeleteListener",
+      "elasticloadbalancing:ModifyListener",
+      "elasticloadbalancing:CreateRule",
+      "elasticloadbalancing:DeleteRule"
+    ]
+
+    resources = [
+      "arn:aws:elasticloadbalancing:${var.region}:${data.aws_caller_identity.current.account_id}:listener/*"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "elasticloadbalancing:DeleteRule"
+    ]
+
+    resources = [
+      "arn:aws:elasticloadbalancing:${var.region}:${data.aws_caller_identity.current.account_id}:listener-rule/*"
+    ]
+  }
 }
 
 resource "aws_iam_policy" "terraform_policy" {
@@ -235,7 +347,7 @@ resource "aws_iam_policy" "terraform_policy" {
   policy = data.aws_iam_policy_document.terraform_policy_document.json
 }
 
-resource "aws_iam_role_policy_attachment" "attach_terraform_to_hcp_terraform_role" {
-  role       = aws_iam_role.hcp_terraform_role.name
+resource "aws_iam_role_policy_attachment" "attach_terraform_to_github_actions_role" {
+  role       = aws_iam_role.github_actions_role.name
   policy_arn = aws_iam_policy.terraform_policy.arn
 }

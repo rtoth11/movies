@@ -148,7 +148,6 @@ resource "aws_ecs_task_definition" "backend" {
   container_definitions = jsonencode([
     {
       name  = "backend"
-      # We need to use a dummy image first since the actual image is built and pushed outside of Terraform
       image = "public.ecr.aws/nginx/nginx:latest"
       portMappings = [{ containerPort = 5000 }]
       environment = [

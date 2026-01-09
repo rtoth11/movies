@@ -13,12 +13,9 @@ resource "aws_ecrpublic_repository" "frontend_ecr_repository" {
   force_destroy = true
 }
 
-resource "aws_iam_openid_connect_provider" "github_oidc_provider" {
+# Created in other workspace
+data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
-
-  client_id_list = [
-    "sts.amazonaws.com"
-  ]
 }
 
 data "aws_iam_policy_document" "github_assume_role_policy_document" {
@@ -26,7 +23,7 @@ data "aws_iam_policy_document" "github_assume_role_policy_document" {
     effect = "Allow"
     principals {
       type = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github_oidc_provider.arn]
+      identifiers = [data.aws_iam_openid_connect_provider.github.arn]
     }
     actions = ["sts:AssumeRoleWithWebIdentity"]
     condition {
