@@ -101,6 +101,7 @@ data "aws_iam_policy_document" "terraform_policy_document" {
       "ec2:DescribeNetworkInterfaces",
       "ec2:DescribeAvailabilityZones",
       "ec2:DescribeAccountAttributes",
+      "ec2:DescribeNetworkAcls",
       "rds:CreateDBInstance",
       "rds:ModifyDBInstance",
       "rds:DeleteDBInstance",
@@ -123,7 +124,19 @@ data "aws_iam_policy_document" "terraform_policy_document" {
       "elasticloadbalancing:DescribeRules",
       "ecs:ListClusters",
       "ecs:DescribeClusters",
-      "ecr-public:DescribeRepositories"
+      "ecs:DescribeServices",
+      "ecs:ListTaskDefinitions",
+      "ecs:DescribeTasks",
+      "ecs:RegisterTaskDefinition",
+      "ecs:DescribeTaskDefinition",
+      "ecs:DeregisterTaskDefinition",
+      "ecs:CreateService",
+      "ecs:UpdateService",
+      "ecs:DeleteService",
+      "ecs:DescribeServices",
+      "ecs:ListServices",
+      "ecr-public:DescribeRepositories",
+      "iam:ListOpenIDConnectProviders"
     ]
     resources = ["*"]
   }
@@ -227,7 +240,7 @@ data "aws_iam_policy_document" "terraform_policy_document" {
       "lambda:UpdateFunctionCode",
       "lambda:GetFunctionEventInvokeConfig",
       "lambda:PutFunctionEventInvokeConfig",
-      "lambda:ListFunctionEventInvokeConfig",
+      "lambda:ListFunctionEventInvokeConfigs",
       "lambda:DeleteFunctionEventInvokeConfig",
       "lambda:UpdateFunctionEventInvokeConfig",
       "lambda:UpdateFunctionConfiguration"
