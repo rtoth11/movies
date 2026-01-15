@@ -1,6 +1,6 @@
 provider "aws" {
   region = "us-east-1"
-  profile = "movies-terraform"
+  #profile = ""
 }
 
 resource "aws_iam_openid_connect_provider" "github_oidc_provider" {
