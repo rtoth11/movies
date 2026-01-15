@@ -87,7 +87,8 @@ data "aws_iam_policy_document" "ecr_public_policy_document" {
     effect = "Allow"
 
     actions = [
-      "ecr-public:GetAuthorizationToken"
+      "ecr-public:GetAuthorizationToken",
+      "sts:GetServiceBearerToken"
     ]
     resources = ["*"]
   }
