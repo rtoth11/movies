@@ -133,6 +133,7 @@ data "aws_iam_policy_document" "lambda_update_function_policy_document" {
       "lambda:UpdateFunctionConfiguration",
       "lambda:GetFunctionConfiguration"
     ]
+
     resources = [
       aws_lambda_function.ingestion_lambda.arn
     ]
@@ -147,4 +148,55 @@ resource "aws_iam_policy" "lambda_update_function_policy" {
 resource "aws_iam_role_policy_attachment" "attach_lambda_update_function_to_github_role" {
   role       = aws_iam_role.github_actions_role.name
   policy_arn = aws_iam_policy.lambda_update_function_policy.arn
+}
+
+data "aws_iam_policy_document" "update_ecs_task_definition_policy_document" {
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ecs:DescribeClusters",
+      "ecs:DescribeTaskDefinition",
+      "ecs:DescribeServices",
+      "iam:PassRole"
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ecs:RegisterTaskDefinition"
+    ]
+
+    resources = [
+      aws_ecs_task_definition.backend.arn,
+      aws_ecs_task_definition.frontend.arn
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ecs:UpdateService"
+    ]
+
+    resources = [
+      aws_ecs_service.backend.arn,
+      aws_ecs_service.frontend.arn
+    ]
+  }
+}
+
+resource "aws_iam_policy" "update_ecs_task_definition_policy" {
+  name   = "update-ecs-task-definition-policy"
+  policy = data.aws_iam_policy_document.update_ecs_task_definition_policy_document.json
+}
+
+resource "aws_iam_role_policy_attachment" "attach_update_ecs_task_definition_to_github_role" {
+  role       = aws_iam_role.github_actions_role.name
+  policy_arn = aws_iam_policy.update_ecs_task_definition_policy.arn
 }
