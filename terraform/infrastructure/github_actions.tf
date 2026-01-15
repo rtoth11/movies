@@ -158,36 +158,12 @@ data "aws_iam_policy_document" "update_ecs_task_definition_policy_document" {
       "ecs:DescribeClusters",
       "ecs:DescribeTaskDefinition",
       "ecs:DescribeServices",
+      "ecs:RegisterTaskDefinition",
+      "ecs:UpdateService",
       "iam:PassRole"
     ]
 
     resources = ["*"]
-  }
-
-  statement {
-    effect = "Allow"
-
-    actions = [
-      "ecs:RegisterTaskDefinition"
-    ]
-
-    resources = [
-      aws_ecs_task_definition.backend.arn,
-      aws_ecs_task_definition.frontend.arn
-    ]
-  }
-
-  statement {
-    effect = "Allow"
-
-    actions = [
-      "ecs:UpdateService"
-    ]
-
-    resources = [
-      aws_ecs_service.backend.arn,
-      aws_ecs_service.frontend.arn
-    ]
   }
 }
 
