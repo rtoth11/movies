@@ -333,8 +333,20 @@ jobs:
         run: |
           aws ecs describe-task-definition \
             --task-definition ${{ needs.terraform_infrastructure.outputs.backend_ecs_task_definition_family }} \
-            --query taskDefinition > task-def.json
-          jq '.containerDefinitions[0].image = "'"${{ needs.terraform_infrastructure.outputs.backend_ecr_repository_url }}:latest"'"' task-def.json > updated-task-def.json
+            --query taskDefinition \
+          | jq '
+            del(
+            .taskDefinitionArn,
+            .revision,
+            .status,
+            .requiresAttributes,
+            .compatibilities,
+            .registeredAt,
+            .registeredBy
+            )
+            | .containerDefinitions[0].image = "'"${{ needs.terraform_infrastructure.outputs.backend_ecr_repository_url }}:latest"'"
+          ' > updated-task-def.json
+  
           aws ecs register-task-definition \
             --cli-input-json file://updated-task-def.json
 
@@ -354,11 +366,23 @@ jobs:
       - name: Update image of frontend ECS task
         run: |
           aws ecs describe-task-definition \
-          --task-definition ${{ needs.terraform_infrastructure.outputs.frontend_ecs_task_definition_family }} \
-          --query taskDefinition > task-def.json
-          jq '.containerDefinitions[0].image = "'"${{ needs.terraform_infrastructure.outputs.frontend_ecr_repository_url }}:latest"'"' task-def.json > updated-task-def.json
+            --task-definition ${{ needs.terraform_infrastructure.outputs.frontend_ecs_task_definition_family }} \
+            --query taskDefinition \
+          | jq '
+            del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy
+            )
+            | .containerDefinitions[0].image = "'"${{ needs.terraform_infrastructure.outputs.frontend_ecr_repository_url }}:latest"'"
+          ' > updated-task-def.json
+
           aws ecs register-task-definition \
-          --cli-input-json file://updated-task-def.json
+            --cli-input-json file://updated-task-def.json
 
       - name: Update service to use new frontend task definition
         run: |
