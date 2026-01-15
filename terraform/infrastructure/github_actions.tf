@@ -82,6 +82,47 @@ resource "aws_iam_role_policy_attachment" "attach_ecr_to_github_role" {
   policy_arn = aws_iam_policy.ecr_policy.arn
 }
 
+data "aws_iam_policy_document" "ecr_public_policy_document" {
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ecr-public:GetAuthorizationToken"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ecr-public:BatchCheckLayerAvailability",
+      "ecr-public:CompleteLayerUpload",
+      "ecr-public:InitiateLayerUpload",
+      "ecr-public:PutImage",
+      "ecr-public:UploadLayerPart",
+      "ecr-public:DescribeImages",
+      "ecr-public:GetRepositoryPolicy",
+      "ecr-public:SetRepositoryPolicy"
+    ]
+
+    resources = [
+      aws_ecrpublic_repository.backend_ecr_repository.arn,
+      aws_ecrpublic_repository.frontend_ecr_repository.arn
+    ]
+  }
+}
+
+resource "aws_iam_policy" "ecr_public_policy" {
+  name   = "ecr-public-policy"
+  policy = data.aws_iam_policy_document.ecr_public_policy_document.json
+}
+
+resource "aws_iam_role_policy_attachment" "attach_ecr_public_to_github_role" {
+  role       = aws_iam_role.github_actions_role.name
+  policy_arn = aws_iam_policy.ecr_public_policy.arn
+}
+
 data "aws_iam_policy_document" "lambda_update_function_policy_document" {
   statement {
     effect = "Allow"
