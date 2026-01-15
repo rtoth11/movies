@@ -1,7 +1,7 @@
 resource "aws_subnet" "private" {
   count                   = length(var.subnets_cidr)
-  vpc_id                  = aws_vpc.vpc_for_postgres.id
-  cidr_block              = cidrsubnet(aws_vpc.vpc_for_postgres.cidr_block, 8, count.index + 10)
+  vpc_id                  = aws_vpc.movies_vpc.id
+  cidr_block              = cidrsubnet(aws_vpc.movies_vpc.cidr_block, 8, count.index + 10)
   availability_zone       = var.azs[count.index]
   map_public_ip_on_launch = false
   tags = {
@@ -12,7 +12,7 @@ resource "aws_subnet" "private" {
 resource "aws_security_group" "backend_sg" {
   name        = "backend-sg"
   description = "Security group for backend servers"
-  vpc_id      = aws_vpc.vpc_for_postgres.id
+  vpc_id      = aws_vpc.movies_vpc.id
 
   ingress {
     from_port = 80
@@ -35,7 +35,7 @@ resource "aws_security_group" "backend_sg" {
 resource "aws_security_group" "ecs_sg" {
   name        = "ecs-sg"
   description = "Security group for ECS tasks"
-  vpc_id      = aws_vpc.vpc_for_postgres.id
+  vpc_id      = aws_vpc.movies_vpc.id
 
   ingress {
     from_port = 0
@@ -66,7 +66,7 @@ resource "aws_lb" "movies_alb" {
 resource "aws_lb_target_group" "frontend" {
   port        = 80
   protocol    = "HTTP"
-  vpc_id      = aws_vpc.vpc_for_postgres.id
+  vpc_id      = aws_vpc.movies_vpc.id
   target_type = "ip"
 }
 
@@ -84,7 +84,7 @@ resource "aws_lb_listener" "http" {
 resource "aws_lb_target_group" "backend" {
   port        = 5000
   protocol    = "HTTP"
-  vpc_id      = aws_vpc.vpc_for_postgres.id
+  vpc_id      = aws_vpc.movies_vpc.id
   target_type = "ip"
 }
 
@@ -148,7 +148,7 @@ resource "aws_ecs_task_definition" "backend" {
   container_definitions = jsonencode([
     {
       name  = "backend"
-      image = "public.ecr.aws/nginx/nginx:latest"
+      image = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.region}.amazonaws.com/flask-placeholder:latest"
       portMappings = [{ containerPort = 5000 }]
       environment = [
         {
@@ -191,7 +191,7 @@ resource "aws_ecs_task_definition" "frontend" {
   container_definitions = jsonencode([
     {
       name  = "frontend"
-      image = "public.ecr.aws/nginx/nginx:latest"
+      image = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.region}.amazonaws.com/nginx:latest"
       portMappings = [{ containerPort = 80 }]
     }
   ])
@@ -233,5 +233,33 @@ resource "aws_ecs_service" "frontend" {
     target_group_arn = aws_lb_target_group.frontend.arn
     container_name   = "frontend"
     container_port   = 80
+  }
+}
+
+resource "aws_route_table" "private_route_table" {
+  vpc_id = aws_vpc.movies_vpc.id
+
+  tags = {
+    Name = "private-route-table"
+  }
+}
+
+resource "aws_route_table_association" "private_association" {
+  count          = length(aws_subnet.private)
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private_route_table.id
+}
+
+module "fck-nat" {
+  source = "git::https://github.com/RaJiska/terraform-aws-fck-nat.git"
+
+  name                 = "movies-nat"
+  vpc_id               = aws_vpc.movies_vpc.id
+  subnet_id            = aws_subnet.public[0].id
+
+  update_route_tables = true
+
+  route_tables_ids = {
+    private = aws_route_table.private_route_table.id
   }
 }

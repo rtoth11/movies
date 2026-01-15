@@ -142,6 +142,10 @@ jobs:
         working-directory: "./terraform/infrastructure"
         run: terraform init
 
+      - name: Terraform Get
+        working-directory: "./terraform/infrastructure"
+        run: terraform get
+
       - name: Terraform Plan
         working-directory: "./terraform/infrastructure"
         run: terraform plan --var "pg_database=${{ secrets.PG_DATABASE }}" --var "pg_user=${{ secrets.PG_USER }}" --var "pg_password=${{ secrets.PG_PASSWORD }}"

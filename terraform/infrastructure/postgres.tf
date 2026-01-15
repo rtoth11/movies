@@ -1,4 +1,4 @@
-resource "aws_vpc" "vpc_for_postgres" {
+resource "aws_vpc" "movies_vpc" {
   cidr_block       = "10.0.0.0/16"
   instance_tenancy = "default"
   enable_dns_support = true
@@ -20,7 +20,7 @@ variable "azs" {
 
 resource "aws_subnet" "public" {
   count                   = length(var.subnets_cidr)
-  vpc_id                  = aws_vpc.vpc_for_postgres.id
+  vpc_id                  = aws_vpc.movies_vpc.id
   cidr_block              = var.subnets_cidr[count.index]
   availability_zone       = var.azs[count.index]
   map_public_ip_on_launch = true
@@ -29,31 +29,31 @@ resource "aws_subnet" "public" {
   }
 }
 
-resource "aws_internet_gateway" "gateway_for_postgres" {
-  vpc_id = aws_vpc.vpc_for_postgres.id
+resource "aws_internet_gateway" "movies_gateway" {
+  vpc_id = aws_vpc.movies_vpc.id
 
   tags = {
-    Name = "gateway-for-postgres"
+    Name = "movies-gateway"
   }
 }
 
-resource "aws_route_table" "route_table_for_postgres" {
-  vpc_id = aws_vpc.vpc_for_postgres.id
+resource "aws_route_table" "public_route_table" {
+  vpc_id = aws_vpc.movies_vpc.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.gateway_for_postgres.id
+    gateway_id = aws_internet_gateway.movies_gateway.id
   }
 
   tags = {
-    Name = "route-table-for-postgres"
+    Name = "public-route-table"
   }
 }
 
 resource "aws_route_table_association" "public_association" {
   count         = length(var.subnets_cidr)
   subnet_id      = aws_subnet.public[count.index].id
-  route_table_id = aws_route_table.route_table_for_postgres.id
+  route_table_id = aws_route_table.public_route_table.id
 }
 
 resource "aws_db_subnet_group" "postgres_subnet_group" {
@@ -68,7 +68,7 @@ resource "aws_db_subnet_group" "postgres_subnet_group" {
 resource "aws_security_group" "postgres_sg" {
   name        = "postgres-security-group"
   description = "Allow inbound traffic for PostgreSQL"
-  vpc_id      = aws_vpc.vpc_for_postgres.id
+  vpc_id      = aws_vpc.movies_vpc.id
 
   ingress {
     from_port   = 5432

@@ -1,6 +1,6 @@
 provider "aws" {
   region = "us-east-1"
-  #profile = ""
+  profile = "movies-terraform"
 }
 
 resource "aws_iam_openid_connect_provider" "github_oidc_provider" {
@@ -37,7 +37,7 @@ resource "aws_iam_role" "github_actions_role" {
 
 data "aws_caller_identity" "current" {}
 
-data "aws_iam_policy_document" "terraform_policy_document" {
+data "aws_iam_policy_document" "first_terraform_policy_document" {
   statement {
     effect = "Allow"
 
@@ -102,6 +102,13 @@ data "aws_iam_policy_document" "terraform_policy_document" {
       "ec2:DescribeAvailabilityZones",
       "ec2:DescribeAccountAttributes",
       "ec2:DescribeNetworkAcls",
+      "ec2:DescribeImages",
+      "ec2:DescribeLaunchTemplates",
+      "ec2:DescribeLaunchTemplateVersions",
+      "ec2:DescribeAutoScalingGroups",
+      "ec2:DescribeTags",
+      "ec2:RunInstances",
+      "ec2:TerminateInstances",
       "rds:CreateDBInstance",
       "rds:ModifyDBInstance",
       "rds:DeleteDBInstance",
@@ -136,11 +143,29 @@ data "aws_iam_policy_document" "terraform_policy_document" {
       "ecs:DescribeServices",
       "ecs:ListServices",
       "ecr-public:DescribeRepositories",
-      "iam:ListOpenIDConnectProviders"
+      "iam:ListOpenIDConnectProviders",
+      "iam:GetInstanceProfile",
+      "ssm:GetParameters",
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeAutoScalingActivities",
+      "autoscaling:DescribeLaunchConfigurations",
+      "autoscaling:DescribeScalingActivities"
     ]
     resources = ["*"]
   }
+}
 
+resource "aws_iam_policy" "first_terraform_policy" {
+  name   = "first-terraform-policy"
+  policy = data.aws_iam_policy_document.first_terraform_policy_document.json
+}
+
+resource "aws_iam_role_policy_attachment" "attach_first_terraform_to_github_actions_role" {
+  role       = aws_iam_role.github_actions_role.name
+  policy_arn = aws_iam_policy.first_terraform_policy.arn
+}
+
+data "aws_iam_policy_document" "second_terraform_policy_document" {
   statement {
     effect = "Allow"
 
@@ -255,20 +280,6 @@ data "aws_iam_policy_document" "terraform_policy_document" {
     effect = "Allow"
 
     actions = [
-      "ecs:RegisterTaskDefinition",
-      "ecs:DescribeTaskDefinition",
-      "ecs:DeregisterTaskDefinition"
-    ]
-
-    resources = [
-      "arn:aws:ecs:${var.region}:${data.aws_caller_identity.current.account_id}:task-definition/*"
-    ]
-  }
-
-  statement {
-    effect = "Allow"
-
-    actions = [
       "ecs:CreateCluster",
       "ecs:DeleteCluster"
     ]
@@ -353,14 +364,73 @@ data "aws_iam_policy_document" "terraform_policy_document" {
       "arn:aws:elasticloadbalancing:${var.region}:${data.aws_caller_identity.current.account_id}:listener-rule/*"
     ]
   }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "iam:CreateInstanceProfile",
+      "iam:DeleteInstanceProfile",
+      "iam:AddRoleToInstanceProfile",
+      "iam:RemoveRoleFromInstanceProfile"
+    ]
+
+    resources = [
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:instance-profile/*"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ec2:CreateNetworkInterface",
+      "ec2:DeleteNetworkInterface",
+      "ec2:ModifyNetworkInterfaceAttribute"
+    ]
+
+    resources = [
+      "arn:aws:ec2:${var.region}:${data.aws_caller_identity.current.account_id}:network-interface/*"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ec2:createLaunchTemplate",
+      "ec2:deleteLaunchTemplate",
+      "ec2:modifyLaunchTemplate"
+    ]
+
+    resources = [
+      "arn:aws:ec2:${var.region}:${data.aws_caller_identity.current.account_id}:launch-template/*"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "autoscaling:createAutoScalingGroup",
+      "autoscaling:deleteAutoScalingGroup",
+      "autoscaling:updateAutoScalingGroup",
+      "autoscaling:enableMetricsCollection",
+      "autoscaling:disableMetricsCollection"
+    ]
+
+    resources = [
+      "arn:aws:autoscaling:${var.region}:${data.aws_caller_identity.current.account_id}:autoScalingGroup:*:autoScalingGroupName/*"
+    ]
+  }
 }
 
-resource "aws_iam_policy" "terraform_policy" {
-  name   = "terraform-policy"
-  policy = data.aws_iam_policy_document.terraform_policy_document.json
+resource "aws_iam_policy" "second_terraform_policy" {
+  name   = "second-terraform-policy"
+  policy = data.aws_iam_policy_document.second_terraform_policy_document.json
 }
 
-resource "aws_iam_role_policy_attachment" "attach_terraform_to_github_actions_role" {
+resource "aws_iam_role_policy_attachment" "attach_second_terraform_to_github_actions_role" {
   role       = aws_iam_role.github_actions_role.name
-  policy_arn = aws_iam_policy.terraform_policy.arn
+  policy_arn = aws_iam_policy.second_terraform_policy.arn
 }

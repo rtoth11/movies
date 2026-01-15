@@ -4,12 +4,12 @@ resource "aws_ecr_repository" "ingestion_ecr_repository" {
 }
 
 resource "aws_ecrpublic_repository" "backend_ecr_repository" {
-  repository_name = "var.backend_ecr_repo_name"
+  repository_name = var.backend_ecr_repo_name
   force_destroy = true
 }
 
 resource "aws_ecrpublic_repository" "frontend_ecr_repository" {
-  repository_name = "var.frontend_ecr_repo_name"
+  repository_name = var.frontend_ecr_repo_name
   force_destroy = true
 }
 
