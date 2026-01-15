@@ -400,7 +400,9 @@ data "aws_iam_policy_document" "second_terraform_policy_document" {
     actions = [
       "ec2:createLaunchTemplate",
       "ec2:deleteLaunchTemplate",
-      "ec2:modifyLaunchTemplate"
+      "ec2:modifyLaunchTemplate",
+      "ec2:createLaunchTemplateVersion",
+      "ec2:deleteLaunchTemplateVersions"
     ]
 
     resources = [
