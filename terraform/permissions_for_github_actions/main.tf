@@ -335,7 +335,8 @@ data "aws_iam_policy_document" "second_terraform_policy_document" {
       "elasticloadbalancing:DeleteTargetGroup",
       "elasticloadbalancing:RegisterTargets",
       "elasticloadbalancing:DeregisterTargets",
-      "elasticloadbalancing:ModifyTargetGroupAttributes"
+      "elasticloadbalancing:ModifyTargetGroupAttributes",
+      "elasticloadbalancing:ModifyTargetGroup"
     ]
 
     resources = [
