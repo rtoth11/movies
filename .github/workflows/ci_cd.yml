@@ -329,6 +329,12 @@ jobs:
           aws lambda wait function-updated \
             --function-name ${{ needs.terraform_infrastructure.outputs.ingestion_lambda_function_name }}
 
+      - name: Wait for backend service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ needs.terraform_infrastructure.outputs.ecs_cluster_name }} \
+            --services ${{ needs.terraform_infrastructure.outputs.backend_ecs_service_name }}
+
       - name: Update image of backend ECS task
         run: |
           aws ecs describe-task-definition \
@@ -362,6 +368,12 @@ jobs:
           aws ecs wait services-stable \
             --cluster ${{ needs.terraform_infrastructure.outputs.ecs_cluster_name }} \
             --services ${{ needs.terraform_infrastructure.outputs.backend_ecs_service_name }}
+
+      - name: Wait for frontend service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ needs.terraform_infrastructure.outputs.ecs_cluster_name }} \
+            --services ${{ needs.terraform_infrastructure.outputs.frontend_ecs_service_name }}
 
       - name: Update image of frontend ECS task
         run: |

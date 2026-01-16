@@ -86,6 +86,11 @@ resource "aws_lb_target_group" "backend" {
   protocol    = "HTTP"
   vpc_id      = aws_vpc.movies_vpc.id
   target_type = "ip"
+
+  health_check {
+    path                = "/health"
+    matcher             = "200"
+  }
 }
 
 resource "aws_lb_listener_rule" "api" {
