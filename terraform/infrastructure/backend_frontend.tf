@@ -133,6 +133,11 @@ resource "aws_iam_role_policy_attachment" "attach_ecs_task_execution_policy" {
   policy_arn = data.aws_iam_policy.ecs_task_execution_policy.arn
 }
 
+resource "aws_cloudwatch_log_group" "movies_backend" {
+  name              = "/ecs/movies-backend"
+  retention_in_days = 30
+}
+
 resource "aws_ecs_task_definition" "backend" {
   family                   = "backend"
   requires_compatibilities = ["FARGATE"]
@@ -148,8 +153,16 @@ resource "aws_ecs_task_definition" "backend" {
   container_definitions = jsonencode([
     {
       name  = "backend"
-      image = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.region}.amazonaws.com/flask-placeholder:latest"
+      image = "public.ecr.aws/i7a2c0m3/movies-backend-repo:latest"
       portMappings = [{ containerPort = 5000 }]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.movies_backend.name
+          "awslogs-region"        = var.region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
       environment = [
         {
           name  = "PG_HOST"
@@ -176,6 +189,11 @@ resource "aws_ecs_task_definition" "backend" {
   ])
 }
 
+resource "aws_cloudwatch_log_group" "movies_frontend" {
+  name              = "/ecs/movies-frontend"
+  retention_in_days = 30
+}
+
 resource "aws_ecs_task_definition" "frontend" {
   family                   = "frontend"
   requires_compatibilities = ["FARGATE"]
@@ -193,6 +211,14 @@ resource "aws_ecs_task_definition" "frontend" {
       name  = "frontend"
       image = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.region}.amazonaws.com/nginx:latest"
       portMappings = [{ containerPort = 80 }]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.movies_frontend.name
+          "awslogs-region"        = var.region
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
     }
   ])
 }

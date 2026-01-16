@@ -149,7 +149,12 @@ data "aws_iam_policy_document" "first_terraform_policy_document" {
       "autoscaling:DescribeAutoScalingGroups",
       "autoscaling:DescribeAutoScalingActivities",
       "autoscaling:DescribeLaunchConfigurations",
-      "autoscaling:DescribeScalingActivities"
+      "autoscaling:DescribeScalingActivities",
+      "logs:CreateLogGroup",
+      "logs:DeleteLogGroup",
+      "logs:PutRetentionPolicy",
+      "logs:DescribeLogGroups",
+      "logs:ListTagsForResource"
     ]
     resources = ["*"]
   }
