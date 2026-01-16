@@ -153,7 +153,7 @@ resource "aws_ecs_task_definition" "backend" {
   container_definitions = jsonencode([
     {
       name  = "backend"
-      image = "public.ecr.aws/i7a2c0m3/movies-backend-repo:latest"
+      image = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.region}.amazonaws.com/flask-placeholder:latest"
       portMappings = [{ containerPort = 5000 }]
       logConfiguration = {
         logDriver = "awslogs"
