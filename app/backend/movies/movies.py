@@ -7,7 +7,7 @@ from .utils import generate_script
 movies_bp = Blueprint("movies", __name__)
 
 
-@movies_bp.route("/movies")
+@movies_bp.route("/api/movies")
 def search_movies():
     title = request.args.get("title")
     year = request.args.get("year")
@@ -62,7 +62,7 @@ def search_movies():
     ])
 
 
-@movies_bp.route("/movies/<int:tmdb_id>")
+@movies_bp.route("/api/movies/<int:tmdb_id>")
 def movie_details(tmdb_id):
     movie = query(
         f'SELECT tmdb_id, title, year FROM "{SCHEMA_NAME}"."silver_movies" WHERE tmdb_id=%s',
@@ -96,7 +96,7 @@ def movie_details(tmdb_id):
     })
 
 
-@movies_bp.route("/movies/<int:tmdb_id>/script")
+@movies_bp.route("/api/movies/<int:tmdb_id>/script")
 def movie_script(tmdb_id):
     rows = query(f"""
         SELECT

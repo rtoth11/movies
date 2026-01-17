@@ -10,21 +10,20 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_security_group" "backend_sg" {
-  name        = "backend-sg"
-  description = "Security group for backend servers"
-  vpc_id      = aws_vpc.movies_vpc.id
+  name   = "alb-sg"
+  vpc_id = aws_vpc.movies_vpc.id
 
   ingress {
-    from_port = 80
-    to_port   = 80
-    protocol  = "tcp"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
-    from_port = 0
-    to_port   = 0
-    protocol  = "-1"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
   tags = {
@@ -33,27 +32,33 @@ resource "aws_security_group" "backend_sg" {
 }
 
 resource "aws_security_group" "ecs_sg" {
-  name        = "ecs-sg"
-  description = "Security group for ECS tasks"
-  vpc_id      = aws_vpc.movies_vpc.id
+  name   = "ecs-tasks-sg"
+  vpc_id = aws_vpc.movies_vpc.id
 
   ingress {
-    from_port = 0
-    to_port   = 65535
-    protocol  = "tcp"
+    from_port       = 5000
+    to_port         = 5000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.backend_sg.id]
+  }
+
+  ingress {
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
     security_groups = [aws_security_group.backend_sg.id]
   }
 
   egress {
-    from_port = 0
-    to_port   = 0
-    protocol  = "-1"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-    tags = {
-      Name = "ecs-security-group"
-    }
+  tags = {
+    Name = "ecs-security-group"
+  }
 }
 
 resource "aws_lb" "movies_alb" {
@@ -88,7 +93,7 @@ resource "aws_lb_target_group" "backend" {
   target_type = "ip"
 
   health_check {
-    path                = "/health"
+    path                = "/api/health"
     matcher             = "200"
   }
 }
