@@ -353,15 +353,15 @@ jobs:
             | .containerDefinitions[0].image = "'"${{ needs.terraform_infrastructure.outputs.backend_ecr_repository_url }}:latest"'"
           ' > updated-task-def.json
   
-          aws ecs register-task-definition \
-            --cli-input-json file://updated-task-def.json
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://updated-task-def.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
 
-      - name: Update service to use new backend task definition
-        run: |
           aws ecs update-service \
             --cluster ${{ needs.terraform_infrastructure.outputs.ecs_cluster_name }} \
             --service ${{ needs.terraform_infrastructure.outputs.backend_ecs_service_name }} \
-            --force-new-deployment
+            --task-definition $TASK_DEF_ARN
 
       - name: Wait for backend service stability
         run: |
@@ -393,15 +393,15 @@ jobs:
             | .containerDefinitions[0].image = "'"${{ needs.terraform_infrastructure.outputs.frontend_ecr_repository_url }}:latest"'"
           ' > updated-task-def.json
 
-          aws ecs register-task-definition \
-            --cli-input-json file://updated-task-def.json
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://updated-task-def.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
 
-      - name: Update service to use new frontend task definition
-        run: |
           aws ecs update-service \
             --cluster ${{ needs.terraform_infrastructure.outputs.ecs_cluster_name }} \
             --service ${{ needs.terraform_infrastructure.outputs.frontend_ecs_service_name }} \
-            --force-new-deployment
+            --task-definition $TASK_DEF_ARN
 
       - name: Wait for frontend service stability
         run: |
