@@ -99,6 +99,10 @@ data "aws_iam_policy_document" "first_terraform_policy_document" {
       "ec2:AuthorizeSecurityGroupEgress",
       "ec2:RevokeSecurityGroupEgress",
       "ec2:DescribeNetworkInterfaces",
+      "ec2:DetachNetworkInterface",
+      "ec2:CreateNetworkInterface",
+      "ec2:DeleteNetworkInterface",
+      "ec2:ModifyNetworkInterfaceAttribute",
       "ec2:DescribeAvailabilityZones",
       "ec2:DescribeAccountAttributes",
       "ec2:DescribeNetworkAcls",
@@ -383,20 +387,6 @@ data "aws_iam_policy_document" "second_terraform_policy_document" {
 
     resources = [
       "arn:aws:iam::${data.aws_caller_identity.current.account_id}:instance-profile/*"
-    ]
-  }
-
-  statement {
-    effect = "Allow"
-
-    actions = [
-      "ec2:CreateNetworkInterface",
-      "ec2:DeleteNetworkInterface",
-      "ec2:ModifyNetworkInterfaceAttribute"
-    ]
-
-    resources = [
-      "arn:aws:ec2:${var.region}:${data.aws_caller_identity.current.account_id}:network-interface/*"
     ]
   }
 
