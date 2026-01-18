@@ -260,7 +260,7 @@ resource "aws_ecs_service" "frontend" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets         = aws_subnet.public[*].id
+    subnets         = aws_subnet.private[*].id
     security_groups = [aws_security_group.ecs_sg.id]
   }
 
@@ -291,6 +291,7 @@ module "fck-nat" {
   name                 = "movies-nat"
   vpc_id               = aws_vpc.movies_vpc.id
   subnet_id            = aws_subnet.public[0].id
+  instance_type        = "t2.micro"
 
   update_route_tables = true
 
