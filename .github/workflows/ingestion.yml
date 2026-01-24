@@ -108,7 +108,7 @@ jobs:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           PG_HOST: ${{ env.PG_HOST }}
-          PG_PORT: ${{ steps.tf_outputs.outputs.outputs.pg_port }}
+          PG_PORT: ${{ steps.tf_outputs.outputs.pg_port }}
           PG_DATABASE: ${{ secrets.PG_DATABASE }}
           PG_USER: ${{ secrets.PG_USER }}
           PG_PASSWORD: ${{ secrets.PG_PASSWORD }}

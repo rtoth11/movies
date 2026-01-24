@@ -66,7 +66,7 @@ jobs:
         id: set_frontend_tags
         run: |
           FRONTEND_TAGS="${{ steps.tf_outputs.outputs.frontend_ecr_repository_url }}:${FRONTEND_VERSION}"
-          FRONTEND_TAGS="$FRONTEND_TAGS,${{ steps.tf_outputs.outputs.outputs.frontend_ecr_repository_url }}:latest"
+          FRONTEND_TAGS="$FRONTEND_TAGS,${{ steps.tf_outputs.outputs.frontend_ecr_repository_url }}:latest"
           echo "frontend_tags=$FRONTEND_TAGS" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
