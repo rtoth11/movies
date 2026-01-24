@@ -11,3 +11,4 @@ GitHub secrets required:
 
 GitHub variables required:
 - DATABRICKS_MOVIE_DATA_VOLUME_PATH: where to upload files in Databricks
+- DEPLOY_BACKEND_AND_FRONTEND: whether to deploy the backend and frontend services (true/false)

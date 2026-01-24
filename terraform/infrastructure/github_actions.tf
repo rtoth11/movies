@@ -36,10 +36,10 @@ data "aws_iam_policy_document" "github_assume_role_policy_document" {
   }
 }
 
-resource "aws_iam_role" "github_actions_role" {
-  name               = var.github_role_name
+resource "aws_iam_role" "role_for_infrastructure_update" {
+  name               = var.name_of_role_for_infrastructure_update
   assume_role_policy = data.aws_iam_policy_document.github_assume_role_policy_document.json
-  path               = var.github_role_path
+  path               = var.path_of_role_for_infrastructure_update
 }
 
 data "aws_iam_policy_document" "ecr_policy_document" {
@@ -77,8 +77,8 @@ resource "aws_iam_policy" "ecr_policy" {
   policy = data.aws_iam_policy_document.ecr_policy_document.json
 }
 
-resource "aws_iam_role_policy_attachment" "attach_ecr_to_github_role" {
-  role       = aws_iam_role.github_actions_role.name
+resource "aws_iam_role_policy_attachment" "attach_ecr" {
+  role       = aws_iam_role.role_for_infrastructure_update.name
   policy_arn = aws_iam_policy.ecr_policy.arn
 }
 
@@ -119,8 +119,8 @@ resource "aws_iam_policy" "ecr_public_policy" {
   policy = data.aws_iam_policy_document.ecr_public_policy_document.json
 }
 
-resource "aws_iam_role_policy_attachment" "attach_ecr_public_to_github_role" {
-  role       = aws_iam_role.github_actions_role.name
+resource "aws_iam_role_policy_attachment" "attach_ecr_public" {
+  role       = aws_iam_role.role_for_infrastructure_update.name
   policy_arn = aws_iam_policy.ecr_public_policy.arn
 }
 
@@ -145,8 +145,8 @@ resource "aws_iam_policy" "lambda_update_function_policy" {
   policy = data.aws_iam_policy_document.lambda_update_function_policy_document.json
 }
 
-resource "aws_iam_role_policy_attachment" "attach_lambda_update_function_to_github_role" {
-  role       = aws_iam_role.github_actions_role.name
+resource "aws_iam_role_policy_attachment" "attach_lambda_update_function" {
+  role       = aws_iam_role.role_for_infrastructure_update.name
   policy_arn = aws_iam_policy.lambda_update_function_policy.arn
 }
 
@@ -173,6 +173,6 @@ resource "aws_iam_policy" "update_ecs_task_definition_policy" {
 }
 
 resource "aws_iam_role_policy_attachment" "attach_update_ecs_task_definition_to_github_role" {
-  role       = aws_iam_role.github_actions_role.name
+  role       = aws_iam_role.role_for_infrastructure_update.name
   policy_arn = aws_iam_policy.update_ecs_task_definition_policy.arn
 }

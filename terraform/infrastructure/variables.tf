@@ -18,13 +18,13 @@ variable github_repo {
   type        = string
 }
 
-variable github_role_name {
-  description = "Name for the GitHub Actions IAM role"
+variable name_of_role_for_infrastructure_update {
+  description = "Name for the role that can be assumed to update infrastructure"
   type        = string
 }
 
-variable github_role_path {
-  description = "Path for the GitHub Actions IAM role"
+variable path_of_role_for_infrastructure_update {
+  description = "Path for the role that can be assumed to update infrastructure"
   type        = string
 }
 
@@ -108,4 +108,10 @@ variable "frontend_cpu" {
 variable "frontend_memory" {
   description = "Memory (in MiB) for the frontend ECS task"
   type        = number
+}
+
+variable "deploy_backend_and_frontend" {
+  description = "Flag to enable or disable the deployment of backend and frontend services"
+  type        = bool
+  default     = false
 }

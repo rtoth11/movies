@@ -1,0 +1,63 @@
+name: Deploy Databricks asset bundle
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy_asset_bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Terraform init
+        working-directory: "./terraform/infrastructure"
+        run: terraform init
+
+      - name: Read Terraform outputs
+        id: tf_outputs
+        working-directory: "./terraform/infrastructure"
+        run: |
+          echo "pg_port=$(terraform output -raw pg_port)" >> $GITHUB_OUTPUT
+          echo "movies_s3_bucket_name=$(terraform output -raw movies_s3_bucket_name)" >> $GITHUB_OUTPUT
+
+      - name: Set up Databricks CLI
+        uses: databricks/setup-cli@main
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set AWS keys and PostgreSQL db info as Databricks secrets
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          PG_PORT: ${{ steps.tf_outputs.outputs.pg_port }}
+          PG_DATABASE: ${{ secrets.PG_DATABASE }}
+          PG_USER: ${{ secrets.PG_USER }}
+          PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
+        run: |
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"aws_access_key_id","string_value":"'"$AWS_ACCESS_KEY_ID"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"aws_secret_access_key","string_value":"'"$AWS_SECRET_ACCESS_KEY"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_port","string_value":"'"$PG_PORT"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_database","string_value":"'"$PG_DATABASE"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_user","string_value":"'"$PG_USER"'"}'
+          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_password","string_value":"'"$PG_PASSWORD"'"}'
+
+      - name: Deploy movies asset bundle
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          BUNDLE_VAR_movie_data_volume_path: ${{ vars.DATABRICKS_MOVIE_DATA_VOLUME_PATH }}
+          BUNDLE_VAR_secret_scope: "secret-scope"
+          BUNDLE_VAR_s3_bucket_name: ${{ steps.tf_outputs.outputs.movies_s3_bucket_name }}
+        working-directory: "./movies_asset_bundle"
+        run: |
+          databricks bundle deploy -t prod
