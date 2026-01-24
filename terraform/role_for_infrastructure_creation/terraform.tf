@@ -2,7 +2,7 @@ terraform {
   cloud {
     organization = "movies"
     workspaces {
-      name = "permissions_for_github_actions"
+      name = "role_for_infrastructure_creation"
     }
   }
   required_providers {

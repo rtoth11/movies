@@ -1,0 +1,45 @@
+name: Destroy infrastructure
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  destroy_infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Terraform init
+        working-directory: "./terraform/role_for_infrastructure_creation"
+        run: terraform init
+
+      - name: Read Terraform outputs
+        id: tf_outputs
+        working-directory: "./terraform/role_for_infrastructure_creation"
+        run: |
+          echo "role_for_infrastructure_creation=$(terraform output -raw role_for_infrastructure_creation)" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ steps.tf_outputs.outputs.role_for_infrastructure_creation }}
+          aws-region: us-east-1
+          mask-aws-account-id: false
+
+      - name: Terraform init
+        working-directory: "./terraform/infrastructure"
+        run: terraform init
+
+      - name: Terraform destroy
+        working-directory: "./terraform/infrastructure"
+        run: terraform destroy -auto-approve --var "pg_database=${{ secrets.PG_DATABASE }}" --var "pg_user=${{ secrets.PG_USER }}" --var "pg_password=${{ secrets.PG_PASSWORD }}" --var "deploy_backend_and_frontend=${{ vars.DEPLOY_BACKEND_AND_FRONTEND }}"

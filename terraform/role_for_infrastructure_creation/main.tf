@@ -29,7 +29,7 @@ data "aws_iam_policy_document" "github_assume_role_policy_document" {
   }
 }
 
-resource "aws_iam_role" "github_actions_role" {
+resource "aws_iam_role" "role_for_infrastructure_creation" {
   name               = var.github_role_name
   assume_role_policy = data.aws_iam_policy_document.github_assume_role_policy_document.json
   path               = var.github_role_path
@@ -169,8 +169,8 @@ resource "aws_iam_policy" "first_terraform_policy" {
   policy = data.aws_iam_policy_document.first_terraform_policy_document.json
 }
 
-resource "aws_iam_role_policy_attachment" "attach_first_terraform_to_github_actions_role" {
-  role       = aws_iam_role.github_actions_role.name
+resource "aws_iam_role_policy_attachment" "attach_first_terraform" {
+  role       = aws_iam_role.role_for_infrastructure_creation.name
   policy_arn = aws_iam_policy.first_terraform_policy.arn
 }
 
@@ -428,7 +428,7 @@ resource "aws_iam_policy" "second_terraform_policy" {
   policy = data.aws_iam_policy_document.second_terraform_policy_document.json
 }
 
-resource "aws_iam_role_policy_attachment" "attach_second_terraform_to_github_actions_role" {
-  role       = aws_iam_role.github_actions_role.name
+resource "aws_iam_role_policy_attachment" "attach_second_terraform" {
+  role       = aws_iam_role.role_for_infrastructure_creation.name
   policy_arn = aws_iam_policy.second_terraform_policy.arn
 }

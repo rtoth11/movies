@@ -1,0 +1,60 @@
+name: CI pipeline
+
+on:
+  pull_request:
+    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  detect_changes:
+    runs-on: ubuntu-latest
+    outputs:
+      ingestion: ${{ steps.filter.outputs.ingestion }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            ingestion:
+              - 'ingestion/**'
+
+  run_tests:
+    needs: detect_changes
+    if: needs.detect_changes.outputs.ingestion == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache Poetry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-poetry-
+
+      - name: Install dependencies
+        working-directory: "./ingestion"
+        run: |
+          pip install poetry
+          poetry install --no-root --with dev
+
+      - name: Run unit tests
+        working-directory: "./ingestion"
+        run: |
+          poetry run pytest --cov=src --cov-report=term-missing
