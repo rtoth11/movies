@@ -42,4 +42,4 @@ jobs:
 
       - name: Terraform destroy
         working-directory: "./terraform/infrastructure"
-        run: terraform destroy -auto-approve
+        run: terraform destroy -auto-approve --var "pg_database=${{ secrets.PG_DATABASE }}" --var "pg_user=${{ secrets.PG_USER }}" --var "pg_password=${{ secrets.PG_PASSWORD }}" --var "deploy_backend_and_frontend=${{ vars.DEPLOY_BACKEND_AND_FRONTEND }}"
