@@ -1,10 +1,11 @@
 name: Create infrastructure with Terraform
 
 on:
-  pull_request:
-    branches: [ "main" ]
-  push:
-    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   infrastructure:
@@ -43,11 +44,6 @@ jobs:
         working-directory: "./terraform/infrastructure"
         run: terraform get
 
-      - name: Terraform plan
-        working-directory: "./terraform/infrastructure"
-        run: terraform plan --var "pg_database=${{ secrets.PG_DATABASE }}" --var "pg_user=${{ secrets.PG_USER }}" --var "pg_password=${{ secrets.PG_PASSWORD }}" --var "deploy_backend_and_frontend=${{ vars.DEPLOY_BACKEND_AND_FRONTEND }}"
-
       - name: Terraform apply
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         working-directory: "./terraform/infrastructure"
         run: terraform apply -auto-approve --var "pg_database=${{ secrets.PG_DATABASE }}" --var "pg_user=${{ secrets.PG_USER }}" --var "pg_password=${{ secrets.PG_PASSWORD }}" --var "deploy_backend_and_frontend=${{ vars.DEPLOY_BACKEND_AND_FRONTEND }}"

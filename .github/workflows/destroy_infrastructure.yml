@@ -3,6 +3,10 @@ name: Destroy infrastructure
 on:
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   destroy_infrastructure:
     runs-on: ubuntu-latest
