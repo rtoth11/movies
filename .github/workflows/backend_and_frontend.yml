@@ -1,0 +1,173 @@
+name: Build and deploy backend and frontend services
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build_and_deploy:
+    if: $"${{ vars.DEPLOY_BACKEND_AND_FRONTEND }}" == "true"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Terraform init
+        working-directory: "./terraform/infrastructure"
+        run: terraform init
+
+      - name: Read Terraform outputs
+        id: tf_outputs
+        working-directory: "./terraform/infrastructure"
+        run: |
+          echo "backend_ecr_repository_url=$(terraform output -raw backend_ecr_repository_url)" >> $GITHUB_OUTPUT
+          echo "frontend_ecr_repository_url=$(terraform output -raw frontend_ecr_repository_url)" >> $GITHUB_OUTPUT
+          echo "role_for_infrastructure_update=$(terraform output -raw role_for_infrastructure_update)" >> $GITHUB_OUTPUT
+          echo "alb_url=$(terraform output -raw alb_url)" >> $GITHUB_OUTPUT
+          echo "ecs_cluster_name=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
+          echo "backend_ecs_task_definition_family=$(terraform output -raw backend_ecs_task_definition_family)" >> $GITHUB_OUTPUT
+          echo "frontend_ecs_task_definition_family=$(terraform output -raw frontend_ecs_task_definition_family)" >> $GITHUB_OUTPUT
+          echo "backend_ecs_service_name=$(terraform output -raw backend_ecs_service_name)" >> $GITHUB_OUTPUT
+          echo "frontend_ecs_service_name=$(terraform output -raw frontend_ecs_service_name)" >> $GITHUB_OUTPUT
+
+      - name: Read backend version from file
+        run: echo "BACKEND_VERSION=$(cat app/backend/VERSION)" >> $GITHUB_ENV
+
+      - name: Read frontend version from file
+        run: echo "FRONTEND_VERSION=$(cat app/frontend/VERSION)" >> $GITHUB_ENV
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ steps.tf_outputs.outputs.role_for_infrastructure_update }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR Public
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
+
+      - name: Set backend image tags
+        id: set_backend_tags
+        run: |
+          BACKEND_TAGS="${{ steps.tf_outputs.outputs.backend_ecr_repository_url }}:${BACKEND_VERSION}"
+          BACKEND_TAGS="$BACKEND_TAGS,${{ steps.tf_outputs.outputs.backend_ecr_repository_url }}:latest"
+          echo "backend_tags=$BACKEND_TAGS" >> $GITHUB_OUTPUT
+
+      - name: Set frontend image tags
+        id: set_frontend_tags
+        run: |
+          FRONTEND_TAGS="${{ steps.tf_outputs.outputs.frontend_ecr_repository_url }}:${FRONTEND_VERSION}"
+          FRONTEND_TAGS="$FRONTEND_TAGS,${{ steps.tf_outputs.outputs.outputs.frontend_ecr_repository_url }}:latest"
+          echo "frontend_tags=$FRONTEND_TAGS" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend image to ECR
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app/backend
+          file: ./app/backend/Dockerfile
+          push: true
+          tags: ${{ steps.set_backend_tags.outputs.backend_tags }}
+          provenance: false
+          platforms: linux/amd64
+
+      - name: Build and push frontend image to ECR
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app/frontend
+          file: ./app/frontend/Dockerfile
+          push: true
+          tags: ${{ steps.set_frontend_tags.outputs.frontend_tags }}
+          provenance: false
+          platforms: linux/amd64
+
+      - name: Wait for backend service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ steps.tf_outputs.outputs.ecs_cluster_name }} \
+            --services ${{ steps.tf_outputs.outputs.backend_ecs_service_name }}
+
+      - name: Update image of backend ECS task
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ steps.tf_outputs.outputs.backend_ecs_task_definition_family }} \
+            --query taskDefinition \
+          | jq '
+            del(
+            .taskDefinitionArn,
+            .revision,
+            .status,
+            .requiresAttributes,
+            .compatibilities,
+            .registeredAt,
+            .registeredBy
+            )
+            | .containerDefinitions[0].image = "'"${{ steps.tf_outputs.outputs.backend_ecr_repository_url }}:latest"'"
+          ' > updated-task-def.json
+
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://updated-task-def.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          aws ecs update-service \
+            --cluster ${{ steps.tf_outputs.outputs.ecs_cluster_name }} \
+            --service ${{ steps.tf_outputs.outputs.backend_ecs_service_name }} \
+            --task-definition $TASK_DEF_ARN
+
+      - name: Wait for backend service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ steps.tf_outputs.outputs.ecs_cluster_name }} \
+            --services ${{ steps.tf_outputs.outputs.backend_ecs_service_name }}
+
+      - name: Wait for frontend service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ steps.tf_outputs.outputs.ecs_cluster_name }} \
+            --services ${{ steps.tf_outputs.outputs.frontend_ecs_service_name }}
+
+      - name: Update image of frontend ECS task
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ steps.tf_outputs.outputs.frontend_ecs_task_definition_family }} \
+            --query taskDefinition \
+          | jq '
+            del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy
+            )
+            | .containerDefinitions[0].image = "'"${{ steps.tf_outputs.outputs.frontend_ecr_repository_url }}:latest"'"
+          ' > updated-task-def.json
+        
+          TASK_DEF_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://updated-task-def.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+        
+          aws ecs update-service \
+            --cluster ${{ steps.tf_outputs.outputs.ecs_cluster_name }} \
+            --service ${{ steps.tf_outputs.outputs.frontend_ecs_service_name }} \
+            --task-definition $TASK_DEF_ARN
+
+      - name: Wait for frontend service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ steps.tf_outputs.outputs.ecs_cluster_name }} \
+            --services ${{ steps.tf_outputs.outputs.frontend_ecs_service_name }}
