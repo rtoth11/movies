@@ -225,11 +225,11 @@ def test__extract_blocks_from_page_dialogue_in_next_block(mocker):
     assert blocks == [
         {
             "index": 1,
-             "type": "dialogue",
-             "character": "JOHN",
-             "dialogue": "Hello there. How are you?",
-             "suffix": "",
-             "parentheticals": "whispering"
+            "type": "dialogue",
+            "character": "JOHN",
+            "dialogue": "Hello there. How are you?",
+            "suffix": "",
+            "parentheticals": "whispering"
         }
     ]
 
@@ -397,7 +397,6 @@ def test__should_process_movie_success(mocker):
 
 
 def test__extract_script_links(mocker):
-    # mock GraphQL response
     mock_post = mocker.patch("extract_movie_data.requests.post")
     mock_post.return_value.json.return_value = {
         "data": {
@@ -408,7 +407,6 @@ def test__extract_script_links(mocker):
         }
     }
 
-    # mock script page fetch
     def fake_get(url):
         fake_resp = Mock()
         fake_resp.__enter__ = lambda s: s
@@ -434,7 +432,6 @@ def test__extract_script_links(mocker):
 
 
 def test__extract_script_links_same_page(mocker):
-    # mock GraphQL response
     mock_post = mocker.patch("extract_movie_data.requests.post")
     mock_post.return_value.json.return_value = {
         "data": {
@@ -445,7 +442,6 @@ def test__extract_script_links_same_page(mocker):
         }
     }
 
-    # mock script page fetch
     def fake_get(url):
         fake_resp = Mock()
         fake_resp.__enter__ = lambda s: s
@@ -471,7 +467,6 @@ def test__extract_script_links_same_page(mocker):
 
 
 def test__extract_script_links_no_pdf_link(mocker):
-    # mock GraphQL response
     mock_post = mocker.patch("extract_movie_data.requests.post")
     mock_post.return_value.json.return_value = {
         "data": {
@@ -481,7 +476,6 @@ def test__extract_script_links_no_pdf_link(mocker):
         }
     }
 
-    # mock script page fetch without PDF link
     def fake_get(url):
         fake_resp = Mock()
         fake_resp.__enter__ = lambda s: s
@@ -503,22 +497,17 @@ def test__extract_script_links_no_pdf_link(mocker):
 
 
 def test__extract_and_store_movie_data(mocker):
-    # Mock script links
     mocker.patch(
         "extract_movie_data._extract_script_links",
         return_value=[("Movie", "2020", "http://example.com/m.pdf")]
     )
 
-    # Mock movie processing check
     mocker.patch("extract_movie_data._should_process_movie", return_value=True)
 
-    # Mock PDF download
     mocker.patch("extract_movie_data.utils.download_pdf", return_value="/tmp/m.pdf")
 
-    # Mock script extraction
     mocker.patch("extract_movie_data._extract_script_from_pdf", return_value=[{"script": True}])
 
-    # Mock function that adds TMDB data
     mocker.patch("extract_movie_data._add_movie_data", return_value={"id": 1})
 
     # Mock Databricks workspace client
@@ -539,22 +528,17 @@ def test__extract_and_store_movie_data(mocker):
 
 
 def test__extract_and_store_movie_data_should_not_process(mocker):
-    # Mock script links
     mocker.patch(
         "extract_movie_data._extract_script_links",
         return_value=[("Movie", "2020", "http://example.com/m.pdf")]
     )
 
-    # Mock movie processing check to return False
     mocker.patch("extract_movie_data._should_process_movie", return_value=False)
 
-    # Mock PDF download
     mocker.patch("extract_movie_data.utils.download_pdf", return_value="/tmp/m.pdf")
 
-    # Mock script extraction
     mocker.patch("extract_movie_data._extract_script_from_pdf", return_value=[{"script": True}])
 
-    # Mock function that adds TMDB data
     mock_add_movie_data = mocker.patch("extract_movie_data._add_movie_data")
 
     # Mock Databricks workspace client
@@ -563,8 +547,5 @@ def test__extract_and_store_movie_data_should_not_process(mocker):
 
     _extract_and_store_movie_data("action", mock_ws, set())
 
-    # Validate that no upload occurred
     assert not mock_ws.files.upload.called
-
-    # Validate that _add_movie_data was never called
     assert not mock_add_movie_data.called

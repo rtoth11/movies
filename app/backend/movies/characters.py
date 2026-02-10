@@ -9,9 +9,13 @@ characters_bp = Blueprint("characters", __name__)
 @characters_bp.route("/api/characters/<string:character_id>")
 def character_details(character_id):
     rows = query(f"""
-        SELECT c.name, m.tmdb_id, m.title
+        SELECT
+            c.name,
+            m.tmdb_id,
+            m.title
         FROM "{SCHEMA_NAME}"."gold_characters" c
-        JOIN "{SCHEMA_NAME}"."silver_movies" m ON m.tmdb_id = c.movie_tmdb_id
+        JOIN "{SCHEMA_NAME}"."silver_movies" m
+            ON m.tmdb_id = c.movie_tmdb_id
         WHERE c.id=%s
     """, [character_id])
 

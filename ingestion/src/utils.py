@@ -109,10 +109,11 @@ def get_already_stored_movies() -> set[int]:
         user=os.getenv("PG_USER"),
         password=os.getenv("PG_PASSWORD")
     )
+    schema_name = os.getenv("PG_SCHEMA", "default")
 
     try:
         with pg_conn.cursor() as cursor:
-            cursor.execute('SELECT tmdb_id FROM "default"."silver_movies";')
+            cursor.execute(f'SELECT tmdb_id FROM "{schema_name}"."silver_movies";')
             rows = cursor.fetchall()
             return {row[0] for row in rows}
     except (psycopg2.errors.UndefinedTable,
