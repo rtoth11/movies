@@ -296,6 +296,11 @@ def export_schema_to_postgres(source_catalog,
             FROM "{target_schema}"."gold_unknown_blocks");
         """
 
+        create_movie_tmdb_index_sql = f"""
+            CREATE INDEX IF NOT EXISTS idx_all_tables_movie_tmdb_id
+            ON "{target_schema}"."all_tables" (movie_tmdb_id);
+        """
+
         create_search_vector_index_sql = f"""
             CREATE INDEX IF NOT EXISTS idx_all_tables_search_vector
             ON "{target_schema}"."all_tables"
@@ -313,16 +318,19 @@ def export_schema_to_postgres(source_catalog,
             ON "{target_schema}"."all_tables" (block_id);
         """
 
-        logging.info("Creating or refreshing materialized view 'all_tables'.")
-        with pg_conn.cursor() as cursor:
-            cursor.execute(create_view_sql)
-            cursor.execute(create_search_vector_index_sql)
-            cursor.execute(create_trigram_index_sql)
-            cursor.execute(create_unique_index_sql)
-            if new_data_exists:
+        if new_data_exists:
+            logging.info("Creating or refreshing materialized view 'all_tables'.")
+            with pg_conn.cursor() as cursor:
+                cursor.execute(create_view_sql)
+                cursor.execute(create_movie_tmdb_index_sql)
+                cursor.execute(create_search_vector_index_sql)
+                cursor.execute(create_trigram_index_sql)
+                cursor.execute(create_unique_index_sql)
                 cursor.execute(
                     f"REFRESH MATERIALIZED VIEW CONCURRENTLY \"{target_schema}\".\"all_tables\";")
-            pg_conn.commit()
+                pg_conn.commit()
+        else:
+            logging.info("No new data was imported; skipping materialized view refresh.")
 
     finally:
         pg_conn.close()

@@ -99,7 +99,6 @@ def test_write_blocks_to_txt(mocker):
     # collect all writes
     handle = mock_file()
 
-    # Build expected writes matching the formatting functions
     expected_scene = _format_scene("INT. HOUSE - DAY")
     expected_dialogue = _format_dialogue("JOHN", "Hello!", "O.S.", "angry")
     expected_empty = _format_dialogue("MARY", "<DIALOGUE MISSING>", "", "")

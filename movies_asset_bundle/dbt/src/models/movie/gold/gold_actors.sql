@@ -10,7 +10,7 @@ with source as (
         actor_name as name,
         current_timestamp() as inserted_at
     from {{ ref('silver_character_actor_map') }}
-    where actor_tmdb_id is not null
+    where actor_tmdb_id != -1
 )
 
 select source.*

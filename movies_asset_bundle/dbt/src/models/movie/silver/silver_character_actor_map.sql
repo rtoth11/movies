@@ -8,7 +8,7 @@ with source as (
     select
         movies.tmdb_id as movie_tmdb_id,
         cta.character as character_name,
-        cta.actor_tmdb_id,
+        coalesce(cta.actor_tmdb_id, -1) as actor_tmdb_id,
         cta.actor_name,
         current_timestamp() as inserted_at
     from {{ source('bronze', 'bronze_json_movies') }} movies

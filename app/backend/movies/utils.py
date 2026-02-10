@@ -7,12 +7,12 @@ _INDENT_DIALOGUE = " " * 18
 _INDENT_PAREN = " " * 24
 
 
-def _format_scene(text):
+def format_scene(text):
     scene = textwrap.indent(text, _INDENT_SCENE)
     return f"\n{scene}\n\n"
 
 
-def _format_dialogue(character, dialogue, suffix, parenthetical):
+def format_dialogue(character, dialogue, suffix, parenthetical):
     suffix_text = f" ({suffix})" if suffix else ""
     parenthetical_text = (
         f"{_INDENT_PAREN}({parenthetical.split(', ')[-1]})\n" if parenthetical else ""
@@ -27,7 +27,7 @@ def _format_dialogue(character, dialogue, suffix, parenthetical):
     )
 
 
-def _format_description(text):
+def format_description(text):
     return textwrap.indent(text, _INDENT_DESCRIPTION) + "\n"
 
 
@@ -36,22 +36,22 @@ def generate_script(blocks):
 
     for block in sorted(blocks, key=lambda b: b["index_in_script"]):
         if block["type"] == "scene":
-            line = _format_scene(block["content"])
+            line = format_scene(block["content"])
 
         elif block["type"] == "dialogue":
-            line = _format_dialogue(block["character"],
-                                    block["content"],
-                                    block["suffix"],
-                                    block["parentheticals"])
+            line = format_dialogue(block["character"],
+                                   block["content"],
+                                   block["suffix"],
+                                   block["parentheticals"])
 
         elif block["type"] == "empty_dialogue":
-            line = _format_dialogue(block["character"],
+            line = format_dialogue(block["character"],
                                     "<DIALOGUE MISSING>",
                                     "",
                                     "")
 
         elif block["type"] == "description":
-            line = _format_description(block["content"])
+            line = format_description(block["content"])
 
         else:
             line = block["content"] + "\n"
