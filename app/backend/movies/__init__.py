@@ -1,1 +1,3 @@
-SCHEMA_NAME = "default"
+import os
+
+SCHEMA_NAME = os.getenv("PG_SCHEMA", "default")

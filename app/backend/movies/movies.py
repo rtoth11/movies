@@ -2,77 +2,101 @@ from flask import Blueprint, request, jsonify
 
 from . import SCHEMA_NAME
 from .db import query
-from .utils import generate_script
 
 movies_bp = Blueprint("movies", __name__)
 
 
 @movies_bp.route("/api/movies")
 def search_movies():
-    title = request.args.get("title")
-    year = request.args.get("year")
     q = request.args.get("q")
-    types = request.args.getlist("types")
+    types = request.args.getlist("types[]")
+
+    page = int(request.args.get("page", 1))
+    limit = int(request.args.get("limit", 20))
+    offset = (page - 1) * limit
 
     sql = f"""
+    WITH filtered_movies AS (
+        SELECT
+            m.tmdb_id,
+            m.title,
+            m.year,
+            COUNT(*) AS total_matches
+        FROM "{SCHEMA_NAME}"."silver_movies" m
+        JOIN "{SCHEMA_NAME}"."all_tables" at
+            ON m.tmdb_id = at.movie_tmdb_id
+        WHERE (
+                %s IS NULL
+                OR at.content ILIKE '%%' || %s || '%%'
+                OR at.search_vector @@ plainto_tsquery(%s)
+            )
+            AND (
+                %s IS NULL
+                OR at.type = ANY(%s::text[])
+            )
+        GROUP BY m.tmdb_id, m.title, m.year
+        HAVING COUNT(*) > 0
+    )
     SELECT
-        m.tmdb_id,
-        m.title,
-        m.year,
-        at.content,
-        at.character_id,
-        at.character
-    FROM "{SCHEMA_NAME}"."silver_movies" m
-    LEFT JOIN "{SCHEMA_NAME}"."all_tables" at
-           ON at.movie_tmdb_id = m.tmdb_id
-    WHERE (%s IS NULL OR m.title ILIKE %s)
-      AND (%s IS NULL OR m.year = %s)
-      AND (
-          %s IS NULL
-          OR at.content ILIKE '%%' || %s || '%%'
-          OR at.search_vector @@ plainto_tsquery(%s)
-      )
-      AND (
-          %s IS NULL
-          OR at.type = ANY(%s::text[])
-      )
-    ORDER BY m.year DESC;
+        tmdb_id,
+        title,
+        year,
+        total_matches,
+        COUNT(*) OVER () AS total_movies
+    FROM filtered_movies
+    ORDER BY title
+    LIMIT %s OFFSET %s;
     """
 
     params = [
-        title, f"%{title}%" if title else None,
-        year, year,
         q, q, q,
         types if types else None,
-        types if types else None
+        types if types else None,
+        limit, offset
     ]
 
     rows = query(sql, params)
 
-    return jsonify([
-        {
-            "tmdb_id": r[0],
-             "title": r[1],
-             "year": r[2],
-             "content": r[3],
-             "character_id": r[4],
-             "character": r[5]
-        }
-        for r in rows
-    ])
+    total = rows[0][4] if rows else 0
+
+    return jsonify({
+        "items": [
+            {
+                "tmdb_id": r[0],
+                "title": r[1],
+                "year": r[2],
+                "total_matches": r[3]
+            }
+            for r in rows
+        ],
+        "total": total
+    })
 
 
 @movies_bp.route("/api/movies/<int:tmdb_id>")
 def movie_details(tmdb_id):
-    movie = query(
-        f'SELECT tmdb_id, title, year FROM "{SCHEMA_NAME}"."silver_movies" WHERE tmdb_id=%s',
-        [tmdb_id]
-    )[0]
+    rows = query(f'''
+        SELECT
+            tmdb_id,
+            title,
+            year
+        FROM "{SCHEMA_NAME}"."silver_movies"
+        WHERE tmdb_id=%s''', [tmdb_id])
+
+    if not rows:
+        return jsonify({"error": "Movie not found"}), 404
+
+    movie = rows[0]
 
     characters = query(f"""
-        SELECT c.id, c.name, a.tmdb_id, a.name
+        SELECT
+            c.id,
+            c.name,
+            a.tmdb_id,
+            a.name
         FROM "{SCHEMA_NAME}"."gold_characters" c
-        JOIN "{SCHEMA_NAME}"."gold_actors" a ON a.tmdb_id = c.actor_tmdb_id
+        JOIN "{SCHEMA_NAME}"."gold_actors" a
+            ON a.tmdb_id = c.actor_tmdb_id
         WHERE c.movie_tmdb_id=%s
         ORDER BY c.name
     """, [tmdb_id])
@@ -96,8 +120,76 @@ def movie_details(tmdb_id):
     })
 
 
+@movies_bp.route("/api/movies/<int:tmdb_id>/script_blocks")
+def movie_script_blocks(tmdb_id):
+    q = request.args.get("q")
+    types = request.args.getlist("types[]")
+
+    page = int(request.args.get("page", 1))
+    limit = int(request.args.get("limit", 10))
+    offset = (page - 1) * limit
+
+    sql = f"""
+    SELECT
+        at.type,
+        at.content,
+        at.character_id,
+        at.character,
+        COUNT(*) OVER() AS total_count
+    FROM "{SCHEMA_NAME}"."all_tables" at
+    WHERE at.movie_tmdb_id = %s
+        AND (
+            %s IS NULL
+            OR at.content ILIKE '%%' || %s || '%%'
+            OR at.search_vector @@ plainto_tsquery(%s)
+        )
+        AND (
+            %s IS NULL
+            OR at.type = ANY(%s::text[])
+        )
+    ORDER BY at.type
+    LIMIT %s OFFSET %s;
+    """
+
+    params = [
+        tmdb_id,
+        q, q, q,
+        types if types else None,
+        types if types else None,
+        limit, offset
+    ]
+
+    rows = query(sql, params)
+
+    total = rows[0][4] if rows else 0
+
+    return jsonify({
+        "items": [
+            {
+                "type": r[0],
+                "content": r[1],
+                "character_id": r[2],
+                "character": r[3]
+            }
+            for r in rows
+        ],
+        "total": total
+    })
+
+
 @movies_bp.route("/api/movies/<int:tmdb_id>/script")
 def movie_script(tmdb_id):
+    rows = query(f'''
+        SELECT title
+        FROM "{SCHEMA_NAME}"."silver_movies"
+        WHERE tmdb_id=%s
+    ''', [tmdb_id])
+
+    if not rows:
+        return jsonify({"error": "Movie not found"}), 404
+
+    movie_title = rows[0][0]
+
     rows = query(f"""
         SELECT
             type,
@@ -112,19 +204,31 @@ def movie_script(tmdb_id):
     """, [tmdb_id])
 
     blocks = []
+
     for r in rows:
-        blocks.append({
+        block = {
             "type": r[0],
             "index_in_script": r[1],
-            "character": r[2],
-            "content": r[3],
-            "suffix": r[4],
-            "parentheticals": r[5],
-        })
+        }
 
-    script = generate_script(blocks)
+        if r[0] in ("scene", "description", "unknown"):
+            block["text"] = r[3]
+
+        elif r[0] in ("dialogue", "empty_dialogue"):
+            block["character"] = r[2]
+            block["suffix"] = r[4]
+            block["parentheticals"] = r[5]
+            block["text"] = r[3] or "<DIALOGUE MISSING>"
+
+        else:
+            block["text"] = r[3]
+
+        block["text"] = block["text"].replace("\n", " ").replace("  ", " ").strip()
+
+        blocks.append(block)
 
     return jsonify({
         "tmdb_id": tmdb_id,
-        "script": script
+        "movie_title": movie_title,
+        "blocks": blocks
     })
