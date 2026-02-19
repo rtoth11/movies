@@ -1,6 +1,6 @@
-output "ingestion_ecr_repository_url" {
-  description = "The URL of the ECR repository that stores the ingestion image."
-  value       = aws_ecr_repository.ingestion_ecr_repository.repository_url
+output "extraction_ecr_repository_url" {
+  description = "The URL of the ECR repository that stores the extraction image."
+  value       = aws_ecr_repository.extraction_ecr_repository.repository_url
 }
 
 output "backend_ecr_repository_url" {
@@ -18,9 +18,9 @@ output "role_for_infrastructure_update" {
   value       = aws_iam_role.role_for_infrastructure_update.arn
 }
 
-output "ingestion_lambda_function_name" {
-  description = "The name of the ingestion Lambda function."
-  value       = aws_lambda_function.ingestion_lambda.function_name
+output "extraction_lambda_function_name" {
+  description = "The name of the extraction Lambda function."
+  value       = aws_lambda_function.extraction_lambda.function_name
 }
 
 output "movies_s3_bucket_name" {

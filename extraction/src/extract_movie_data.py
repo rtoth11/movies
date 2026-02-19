@@ -7,7 +7,6 @@ import re
 import requests
 from requests.adapters import HTTPAdapter
 from typing import Optional
-import time
 from urllib3.util.retry import Retry
 
 from bs4 import BeautifulSoup
@@ -20,8 +19,8 @@ from script_verification import write_blocks_to_txt
 import utils
 
 GENRES = [
-    ("action", 15040),
-    ("adventure", 15041)
+    ("action", 10540),
+    ("adventure", 10541)
 ]
 
 SCRIPTS_WEBSITE = "https://www.scriptslug.com"
@@ -335,7 +334,7 @@ def _extract_script_links(genre: tuple[str, int], already_stored_movie_ids: set[
         else:
             logging.warning(f"No script link found on page: {script_page_link}.")
 
-        if len(script_links) > 100:
+        if len(script_links) > 20:
             break # TODO: remove
 
     return script_links
@@ -374,10 +373,9 @@ def _extract_and_store_movie_data(genre: tuple[str, int],
         all_movies.append(movie_data)
         already_stored_movie_ids.add(movie_tmdb_id)
         i += 1
-        time.sleep(1)
 
     if len(all_movies) == 0:
-        logging.info(f"No new movie data extracted for genre '{genre}'.")
+        logging.info(f"No new movie data extracted for genre '{genre_name}'.")
         return
 
     logging.info("Uploading extracted movie data to Databricks workspace.")
@@ -385,7 +383,7 @@ def _extract_and_store_movie_data(genre: tuple[str, int],
     all_movies = utils.remove_null_bytes(all_movies)
     json_bytes = json.dumps(all_movies, indent=2).encode("utf-8")
     binary_stream = io.BytesIO(json_bytes)
-    workspace_client.files.upload(VOLUME_FILE_PATH.format(genre=genre),
+    workspace_client.files.upload(VOLUME_FILE_PATH.format(genre=genre_name),
                                   binary_stream,
                                   overwrite=True)
 

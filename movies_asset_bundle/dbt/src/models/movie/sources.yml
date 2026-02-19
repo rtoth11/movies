@@ -1,6 +1,6 @@
 sources:
   - name: bronze
-    catalog: movies
+    catalog: "{{ var('catalog_name') }}"
     schema: "{{ var('bronze_schema_name') }}"
     tables:
       - name: bronze_json_movies

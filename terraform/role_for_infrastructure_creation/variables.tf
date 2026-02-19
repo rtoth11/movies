@@ -4,7 +4,7 @@ variable region {
 }
 
 variable github_repo {
-  description = "GitHub repository in the format 'owner/repo'"
+  description = "GitHub repository in the format 'owner/repo'. This can assume the role with necessary permissions to create the infrastructure."
   type        = string
 }
 

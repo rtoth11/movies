@@ -14,7 +14,7 @@ jobs:
   detect_changes:
     runs-on: ubuntu-latest
     outputs:
-      ingestion: ${{ steps.filter.outputs.ingestion }}
+      extraction: ${{ steps.filter.outputs.extraction }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -24,12 +24,12 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           filters: |
-            ingestion:
-              - 'ingestion/**'
+            extraction:
+              - 'extraction/**'
 
   run_tests:
     needs: detect_changes
-    if: needs.detect_changes.outputs.ingestion == 'true'
+    if: needs.detect_changes.outputs.extraction == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -49,12 +49,12 @@ jobs:
             ${{ runner.os }}-poetry-
 
       - name: Install dependencies
-        working-directory: "./ingestion"
+        working-directory: "./extraction"
         run: |
           pip install poetry
           poetry install --no-root --with dev
 
       - name: Run unit tests
-        working-directory: "./ingestion"
+        working-directory: "./extraction"
         run: |
           poetry run pytest --cov=src --cov-report=term-missing
