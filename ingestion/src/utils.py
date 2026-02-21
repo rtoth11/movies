@@ -7,14 +7,19 @@ from typing import Optional
 import psycopg2
 
 
-def download_pdf(pdf_link: str, download_path: str) -> Optional[str]:
-    with requests.get(pdf_link) as response:
-        if response.status_code != 200:
-            logging.warning(f"Failed to download PDF from {pdf_link}: "
-                            f"Status code {response.status_code}.")
-            return None
-        with open(download_path, "wb") as f:
-            f.write(response.content)
+def download_pdf(pdf_link: str, download_path: str, session: requests.Session) -> Optional[str]:
+    response = session.get(pdf_link)
+
+    if response.status_code != 200:
+        logging.warning(
+            f"Failed to download PDF from {pdf_link}: "
+            f"Status code {response.status_code}."
+        )
+        return None
+
+    with open(download_path, "wb") as f:
+        f.write(response.content)
+
     return download_path
 
 
@@ -125,3 +130,13 @@ def get_already_stored_movies() -> set[int]:
         raise
     finally:
         pg_conn.close()
+
+
+def remove_null_bytes(obj):
+    if isinstance(obj, str):
+        return obj.replace("\x00", "")
+    if isinstance(obj, list):
+        return [remove_null_bytes(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: remove_null_bytes(v) for k, v in obj.items()}
+    return obj

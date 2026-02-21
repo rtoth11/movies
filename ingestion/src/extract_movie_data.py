@@ -5,6 +5,10 @@ import os
 from pathlib import Path
 import re
 import requests
+from requests.adapters import HTTPAdapter
+from typing import Optional
+import time
+from urllib3.util.retry import Retry
 
 from bs4 import BeautifulSoup
 from databricks.sdk import WorkspaceClient
@@ -15,13 +19,17 @@ from get_scripts_request import json_data
 from script_verification import write_blocks_to_txt
 import utils
 
-GENRES = ["action", "adventure"]
+GENRES = [
+    ("action", 15040),
+    ("adventure", 15041)
+]
 
 SCRIPTS_WEBSITE = "https://www.scriptslug.com"
 SCRIPTS_API_LINK = "https://www.scriptslug.com/gql"
 REFERER = "https://www.scriptslug.com/scripts/genre/{genre}?pg=50"
 
-VOLUME_FILE_PATH = f"{os.getenv('DATABRICKS_MOVIE_DATA_VOLUME_PATH')}{{genre}}_movies.json"
+VOLUME_PATH = os.getenv("DATABRICKS_MOVIE_DATA_VOLUME_PATH")
+VOLUME_FILE_PATH = f"{VOLUME_PATH}{{genre}}_movies.json"
 SCRIPT_PDF_PATH = os.path.join("/tmp", "{movie}.pdf")
 
 CHARACTER_LINE_RE = re.compile(r"^([A-Z0-9 '.-]+?)(?:\s*\(([^)]+)\))*$")
@@ -33,25 +41,20 @@ tmdb_search = tmdb.Search()
 
 checked_script_pages = set()
 
+session = requests.Session()
 
-def _add_movie_data(movie_title: str, movie_year: str, script_data: list[dict]) -> dict:
-    response = tmdb_search.movie(query=movie_title, year=movie_year)
-    candidate_movies = [
-        movie for movie in response["results"]
-        if (movie["title"].replace(":", "").replace("-", "")
-            == movie_title.replace(":", "").replace("-", ""))
-    ]
+retries = Retry(
+    total=1,
+    backoff_factor=0.5,
+    status_forcelist=[500, 502, 503, 504],
+)
 
-    movie = tmdb.Movies(candidate_movies[0]["id"])
-    cast = movie.credits()["cast"]
+adapter = HTTPAdapter(max_retries=retries)
 
-    return {
-        "tmdb_id": candidate_movies[0]["id"],
-        "title": movie_title,
-        "year": movie_year,
-        "script": script_data,
-        "character_to_actor": utils.create_character_actor_map(script_data, cast)
-    }
+session.mount("https://", adapter)
+session.mount("http://", adapter)
+
+tmdb.REQUESTS_SESSION = session
 
 
 def _process_dialogue_lines(lines: list[str]) -> tuple[list[str], str, list[list[str]], list[str]]:
@@ -248,7 +251,7 @@ def _extract_script_from_pdf(pdf_path: str) -> list[dict]:
 
 
 def _should_process_movie(movie_title: str, movie_year: str, already_stored_movie_ids: set[int]) \
-        -> bool:
+        -> Optional[int]:
     response = tmdb_search.movie(query=movie_title, year=movie_year)
     candidate_movies = [
         movie for movie in response["results"]
@@ -259,106 +262,119 @@ def _should_process_movie(movie_title: str, movie_year: str, already_stored_movi
     if len(candidate_movies) == 0:
         logging.debug(
             f"The {movie_title} ({movie_year}) movie was not found. Skipping it.")
-        return False
+        return None
 
     if len(candidate_movies) > 1:
         logging.debug(
             f"Multiple candidates for the {movie_title} ({movie_year}) movie. Skipping it.")
-        return False
+        return None
 
     if candidate_movies[0]["id"] in already_stored_movie_ids:
         logging.debug(
             f"The {movie_title} ({movie_year}) movie is already stored. Skipping it.")
-        return False
+        return None
 
-    return True
+    return candidate_movies[0]["id"]
 
 
-def _extract_script_links(genre: str) -> list[tuple]:
+def _extract_script_links(genre: tuple[str, int], already_stored_movie_ids: set[int]) \
+        -> list[tuple[int, str, str, str]]:
     logging.info("Extracting script links.")
 
+    genre_name, genre_id = genre
+    json_data["variables"]["relationId"] = genre_id
     script_links = []
 
-    response = requests.post(
+    response = session.post(
         SCRIPTS_API_LINK,
         headers={
             "accept": "*/*",
             "content-type": "application/json",
             "user-agent": "Mozilla/5.0",
             "origin": SCRIPTS_WEBSITE,
-            "referer": REFERER.format(genre=genre)
+            "referer": REFERER.format(genre=genre_name)
         },
         json=json_data
     )
-    script_page_links = [f"{SCRIPTS_WEBSITE}/{entry['uri']}"
-                         for entry in response.json()["data"]["scriptsEntries"]]
+    response.raise_for_status()
+    entries = response.json()["data"]["scriptsEntries"]
 
-    for script_page_link in script_page_links:
+    for entry in entries:
+        if "scriptTitle" not in entry:
+            if "title" in entry:
+                logging.debug(f"{entry['title']} is not a movie. Skipping it.")
+            else:
+                logging.debug(f"Entry without title found: {entry}. Skipping it.")
+            continue
+
+        movie_title = entry["scriptTitle"]
+        movie_year = entry["year"]
+        script_page_link = f"{SCRIPTS_WEBSITE}/{entry['uri']}"
+
         # The same movie can appear in multiple genres
         if script_page_link in checked_script_pages:
             continue
         checked_script_pages.add(script_page_link)
 
-        logging.debug(f"Script link: {script_page_link}")
+        movie_tmdb_id = _should_process_movie(movie_title, movie_year, already_stored_movie_ids)
+        if movie_tmdb_id is None:
+            continue
 
-        with requests.get(script_page_link) as script_page_response:
-            soup = BeautifulSoup(script_page_response.content, "html.parser")
-            link_element = soup.find("a", href=re.compile("live/pdf/scripts"))
+        script_page_response = session.get(script_page_link)
+        script_page_response.raise_for_status()
+        soup = BeautifulSoup(script_page_response.content, "html.parser")
+        link_element = soup.find("a", href=re.compile("live/pdf/scripts"))
 
-            main_title_element = soup.find(
-                "span", class_="text-3xl leading-normal md:text-4xl lg:text-5xl lg:leading-normal")
-            additional_title_element_type_one = soup.find(
-                "span", class_="text-3xl leading-normal md:text-3xl lg:text-4xl lg:leading-normal")
-            additional_title_element_type_two = soup.find(
-                "span", class_="text-2xl leading-normal md:text-3xl lg:text-4xl lg:leading-normal")
-            full_title = main_title_element.text.strip()
-            if additional_title_element_type_one is not None:
-                full_title += f" {additional_title_element_type_one.text.strip()}"
-            elif additional_title_element_type_two is not None:
-                full_title += f" {additional_title_element_type_two.text.strip()}"
+        if link_element is not None:
+            script_links.append((
+                movie_tmdb_id,
+                movie_title,
+                movie_year,
+                link_element["href"]
+            ))
+        else:
+            logging.warning(f"No script link found on page: {script_page_link}.")
 
-            type_and_year_element = soup.find(
-                "p", class_="font-semibold text-slate-500 font-slab text-lg")
-
-            if link_element is not None:
-                script_links.append((
-                    full_title,
-                    type_and_year_element.text.split("-")[1].strip(),
-                    link_element["href"]
-                ))
-            else:
-                logging.warning(f"No script link found on page: {script_page_link}")
-
-        if len(script_links) > 20:
+        if len(script_links) > 100:
             break # TODO: remove
 
     return script_links
 
 
-def _extract_and_store_movie_data(genre: str,
+def _extract_and_store_movie_data(genre: tuple[str, int],
                                   workspace_client: WorkspaceClient,
                                   already_stored_movie_ids: set):
     all_movies = []
+    i = 1
+    genre_name = genre[0]
 
-    logging.info(f"Extracting movie data for genre '{genre}'.")
+    logging.info(f"Extracting movie data for genre '{genre_name}'.")
 
-    script_links = _extract_script_links(genre)
+    script_links = _extract_script_links(genre, already_stored_movie_ids)
 
-    logging.info(f"Found {len(script_links)} scripts for genre '{genre}'.")
+    logging.info(f"Found {len(script_links)} scripts for genre '{genre_name}'.")
 
-    for movie_title, movie_year, script_link in script_links:
-        if not _should_process_movie(movie_title, movie_year, already_stored_movie_ids):
-            continue
-
-        logging.debug(f"Extracting script from {script_link}.")
+    for movie_tmdb_id, movie_title, movie_year, script_link in script_links:
+        logging.info(f"Extracting script from {i}. link: {script_link}.")
 
         download_path = SCRIPT_PDF_PATH.format(movie=script_link.split(".pdf")[0].split("/")[-1])
-        pdf_path = utils.download_pdf(script_link, download_path)
+        pdf_path = utils.download_pdf(script_link, download_path, session)
 
         script_data = _extract_script_from_pdf(pdf_path)
-        movie_data = _add_movie_data(movie_title, movie_year, script_data)
-        if movie_data != {}:
-            all_movies.append(movie_data)
+        movie = tmdb.Movies(movie_tmdb_id)
+        cast = movie.credits()["cast"]
+        movie_data = {
+            "tmdb_id": movie_tmdb_id,
+            "title": movie_title,
+            "year": movie_year,
+            "script": script_data,
+            "character_to_actor": utils.create_character_actor_map(script_data, cast)
+        }
+
+        all_movies.append(movie_data)
+        already_stored_movie_ids.add(movie_tmdb_id)
+        i += 1
+        time.sleep(1)
 
     if len(all_movies) == 0:
         logging.info(f"No new movie data extracted for genre '{genre}'.")
@@ -366,6 +382,7 @@ def _extract_and_store_movie_data(genre: str,
 
     logging.info("Uploading extracted movie data to Databricks workspace.")
 
+    all_movies = utils.remove_null_bytes(all_movies)
     json_bytes = json.dumps(all_movies, indent=2).encode("utf-8")
     binary_stream = io.BytesIO(json_bytes)
     workspace_client.files.upload(VOLUME_FILE_PATH.format(genre=genre),
@@ -376,7 +393,7 @@ def _extract_and_store_movie_data(genre: str,
 
 
 def handler(event, context):
-    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.INFO)
 
     databricks_host = os.getenv("DATABRICKS_HOST")
     databricks_token = os.getenv("DATABRICKS_TOKEN")

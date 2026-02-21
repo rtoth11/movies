@@ -59,6 +59,8 @@ def main():
 
     dbutils.fs().rm(args.movie_data_volume_path, True)
 
+    logging.info("Finished processing movie data.")
+
 
 if __name__ == "__main__":
     logging.getLogger().setLevel(logging.INFO)

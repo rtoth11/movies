@@ -2,7 +2,6 @@ import json
 from unittest.mock import Mock, MagicMock
 
 from extract_movie_data import (
-    _add_movie_data,
     _process_dialogue_lines,
     _extract_blocks_from_page,
     _extract_script_from_pdf,
@@ -15,36 +14,6 @@ from extract_movie_data import (
     VOLUME_FILE_PATH
 )
 import extract_movie_data
-
-
-def test__add_movie_data_success(mocker):
-    mocker.patch.object(
-        tmdb_search,
-        "movie",
-        return_value={"results": [{"title": "Movie", "id": 123}]}
-    )
-
-    mock_movie = Mock()
-    mock_movie.credits.return_value = {
-        "cast": [
-            {"id": 10, "name": "Actor", "character": "Hero"}
-        ]
-    }
-
-    mocker.patch("extract_movie_data.tmdb.Movies", return_value=mock_movie)
-    mocker.patch("extract_movie_data.utils.create_character_actor_map",
-                 return_value=[{"test": "ok"}])
-
-    script_data = [{"dummy": True}]
-    result = _add_movie_data("Movie", "2020", script_data)
-
-    assert result == {
-        "tmdb_id": 123,
-        "title": "Movie",
-        "year": "2020",
-        "script": script_data,
-        "character_to_actor": [{"test": "ok"}]
-    }
 
 
 def test__process_dialogue_lines_basic():
@@ -360,7 +329,7 @@ def test__should_process_movie_no_results(mocker):
     )
 
     result = _should_process_movie("FakeMovie", "2020", set())
-    assert result == False
+    assert result is None
 
 
 def test__should_process_movie_multiple_results(mocker):
@@ -371,7 +340,7 @@ def test__should_process_movie_multiple_results(mocker):
     )
 
     result = _should_process_movie("Movie", "2020", set())
-    assert result == False
+    assert result is None
 
 
 def test__should_process_movie_movie_already_stored(mocker):
@@ -382,7 +351,7 @@ def test__should_process_movie_movie_already_stored(mocker):
     )
 
     result = _should_process_movie("Movie", "2020", {123})
-    assert result == False
+    assert result is None
 
 
 def test__should_process_movie_success(mocker):
@@ -393,105 +362,194 @@ def test__should_process_movie_success(mocker):
     )
 
     result = _should_process_movie("Movie", "2020", set())
-    assert result == True
+    assert result == 123
 
 
 def test__extract_script_links(mocker):
-    mock_post = mocker.patch("extract_movie_data.requests.post")
-    mock_post.return_value.json.return_value = {
+    mock_session = Mock()
+    mocker.patch.object(extract_movie_data, "session", mock_session)
+
+    mock_post_response = Mock()
+    mock_post_response.json.return_value = {
         "data": {
             "scriptsEntries": [
-                {"uri": "movie-1"},
-                {"uri": "movie-2"}
+                {
+                    "scriptTitle": "Movie 1",
+                    "year": "2020",
+                    "uri": "movie-1"
+                }
             ]
         }
     }
+    mock_post_response.raise_for_status.return_value = None
+    mock_session.post.return_value = mock_post_response
 
-    def fake_get(url):
-        fake_resp = Mock()
-        fake_resp.__enter__ = lambda s: s
-        fake_resp.__exit__ = lambda *a: None
+    # Mock _should_process_movie
+    mocker.patch(
+        "extract_movie_data._should_process_movie",
+        return_value=123
+    )
 
-        fake_resp.content = b"""
-            <a href="https://some-website.com/live/pdf/scripts/m1.pdf">PDF</a>
-            <span class="text-3xl leading-normal md:text-4xl lg:text-5xl lg:leading-normal">Movie 1</span>
-            <p class="font-semibold text-slate-500 font-slab text-lg">Film - 2020</p>
-        """
-        return fake_resp
-
-    mocker.patch("extract_movie_data.requests.get", side_effect=fake_get)
+    # Mock GET (HTML page with PDF link)
+    mock_get_response = Mock()
+    mock_get_response.content = b"""
+        <a href="https://some-website.com/live/pdf/scripts/m1.pdf">PDF</a>
+    """
+    mock_get_response.raise_for_status.return_value = None
+    mock_session.get.return_value = mock_get_response
 
     checked_script_pages.clear()
 
-    result = _extract_script_links("action")
+    result = _extract_script_links(("action", 1), set())
 
     assert result == [
-        ("Movie 1", "2020", "https://some-website.com/live/pdf/scripts/m1.pdf"),
-        ("Movie 1", "2020", "https://some-website.com/live/pdf/scripts/m1.pdf")
+        (123, "Movie 1", "2020", "https://some-website.com/live/pdf/scripts/m1.pdf")
     ]
+
+
+def test__extract_script_links_not_a_movie(mocker):
+    mock_session = Mock()
+    mocker.patch.object(extract_movie_data, "session", mock_session)
+
+    mock_post_response = Mock()
+    mock_post_response.json.return_value = {
+        "data": {
+            "scriptsEntries": [
+                {
+                    "title": "Movie 1",  # not "scriptTitle"
+                    "year": "2020",
+                    "uri": "movie-1"
+                }
+            ]
+        }
+    }
+    mock_post_response.raise_for_status.return_value = None
+    mock_session.post.return_value = mock_post_response
+
+    mocker.patch("extract_movie_data._should_process_movie", return_value=123)
+
+    mock_get_response = Mock()
+    mock_get_response.content = b"""
+        <a href="https://some-website.com/live/pdf/scripts/m1.pdf">PDF</a>
+    """
+    mock_get_response.raise_for_status.return_value = None
+    mock_session.get.return_value = mock_get_response
+
+    checked_script_pages.clear()
+
+    result = _extract_script_links(("action", 1), set())
+
+    assert result == []
 
 
 def test__extract_script_links_same_page(mocker):
-    mock_post = mocker.patch("extract_movie_data.requests.post")
-    mock_post.return_value.json.return_value = {
+    mock_session = Mock()
+    mocker.patch.object(extract_movie_data, "session", mock_session)
+
+    mock_post_response = Mock()
+    mock_post_response.json.return_value = {
         "data": {
             "scriptsEntries": [
-                {"uri": "movie-1"},
-                {"uri": "movie-1"}
+                {
+                    "scriptTitle": "Movie 1",
+                    "year": "2020",
+                    "uri": "movie-1"
+                },
+                {
+                    "scriptTitle": "Movie 1",
+                    "year": "2020",
+                    "uri": "movie-1"
+                }
             ]
         }
     }
+    mock_post_response.raise_for_status.return_value = None
+    mock_session.post.return_value = mock_post_response
 
-    def fake_get(url):
-        fake_resp = Mock()
-        fake_resp.__enter__ = lambda s: s
-        fake_resp.__exit__ = lambda *a: None
+    mocker.patch("extract_movie_data._should_process_movie", return_value=123)
 
-        fake_resp.content = b"""
-            <a href="https://some-website.com/live/pdf/scripts/m1.pdf">PDF</a>
-            <span class="text-3xl leading-normal md:text-4xl lg:text-5xl lg:leading-normal">Movie 1</span>
-            <p class="font-semibold text-slate-500 font-slab text-lg">Film - 2020</p>
-        """
-        return fake_resp
-
-    mocker.patch("extract_movie_data.requests.get", side_effect=fake_get)
+    mock_get_response = Mock()
+    mock_get_response.content = b"""
+        <a href="https://some-website.com/live/pdf/scripts/m1.pdf">PDF</a>
+    """
+    mock_get_response.raise_for_status.return_value = None
+    mock_session.get.return_value = mock_get_response
 
     checked_script_pages.clear()
 
-    result = _extract_script_links("action")
+    result = _extract_script_links(("action", 1), set())
 
-    assert result == [
-        ("Movie 1", "2020", "https://some-website.com/live/pdf/scripts/m1.pdf")
-    ]
+    assert len(result) == 1
     assert len(checked_script_pages) == 1
 
 
-def test__extract_script_links_no_pdf_link(mocker):
-    mock_post = mocker.patch("extract_movie_data.requests.post")
-    mock_post.return_value.json.return_value = {
+def test__extract_script_links_should_not_process_movie(mocker):
+    mock_session = Mock()
+    mocker.patch.object(extract_movie_data, "session", mock_session)
+
+    mock_post_response = Mock()
+    mock_post_response.json.return_value = {
         "data": {
             "scriptsEntries": [
-                {"uri": "movie-1"}
+                {
+                    "scriptTitle": "Movie 1",
+                    "year": "2020",
+                    "uri": "movie-1"
+                }
             ]
         }
     }
+    mock_post_response.raise_for_status.return_value = None
+    mock_session.post.return_value = mock_post_response
 
-    def fake_get(url):
-        fake_resp = Mock()
-        fake_resp.__enter__ = lambda s: s
-        fake_resp.__exit__ = lambda *a: None
+    mocker.patch("extract_movie_data._should_process_movie", return_value=None)
 
-        fake_resp.content = b"""
-            <span class="text-3xl leading-normal md:text-4xl lg:text-5xl lg:leading-normal">Movie 1</span>
-            <p class="font-semibold text-slate-500 font-slab text-lg">Film - 2020</p>
-        """
-        return fake_resp
-
-    mocker.patch("extract_movie_data.requests.get", side_effect=fake_get)
+    mock_get_response = Mock()
+    mock_get_response.content = b"""
+        <a href="https://some-website.com/live/pdf/scripts/m1.pdf">PDF</a>
+    """
+    mock_get_response.raise_for_status.return_value = None
+    mock_session.get.return_value = mock_get_response
 
     checked_script_pages.clear()
 
-    result = _extract_script_links("action")
+    result = _extract_script_links(("action", 1), set())
+
+    assert result == []
+
+
+def test__extract_script_links_no_pdf_link(mocker):
+    mock_session = Mock()
+    mocker.patch.object(extract_movie_data, "session", mock_session)
+
+    mock_session = Mock()
+    mocker.patch.object(extract_movie_data, "session", mock_session)
+
+    mock_post_response = Mock()
+    mock_post_response.json.return_value = {
+        "data": {
+            "scriptsEntries": [
+                {
+                    "scriptTitle": "Movie 1",
+                    "year": "2020",
+                    "uri": "movie-1"
+                }
+            ]
+        }
+    }
+    mock_post_response.raise_for_status.return_value = None
+    mock_session.post.return_value = mock_post_response
+
+    mocker.patch("extract_movie_data._should_process_movie", return_value=123)
+
+    mock_get_response = Mock()
+    mock_get_response.content = b"<html>No PDF</html>"
+    mock_get_response.raise_for_status.return_value = None
+    mock_session.get.return_value = mock_get_response
+
+    checked_script_pages.clear()
+
+    result = _extract_script_links(("action", 1), set())
 
     assert result == []
 
@@ -499,53 +557,62 @@ def test__extract_script_links_no_pdf_link(mocker):
 def test__extract_and_store_movie_data(mocker):
     mocker.patch(
         "extract_movie_data._extract_script_links",
-        return_value=[("Movie", "2020", "http://example.com/m.pdf")]
+        return_value=[(123, "Movie", "2020", "http://example.com/m.pdf")]
     )
-
-    mocker.patch("extract_movie_data._should_process_movie", return_value=True)
 
     mocker.patch("extract_movie_data.utils.download_pdf", return_value="/tmp/m.pdf")
 
-    mocker.patch("extract_movie_data._extract_script_from_pdf", return_value=[{"script": True}])
+    mocker.patch(
+        "extract_movie_data._extract_script_from_pdf",
+        return_value=[{"script": True}]
+    )
 
-    mocker.patch("extract_movie_data._add_movie_data", return_value={"id": 1})
+    mock_tmdb_movie = Mock()
+    mock_tmdb_movie.credits.return_value = {"cast": [{"name": "Actor"}]}
 
-    # Mock Databricks workspace client
+    mocker.patch("extract_movie_data.tmdb.Movies", return_value=mock_tmdb_movie)
+
+    mocker.patch(
+        "extract_movie_data.utils.create_character_actor_map",
+        return_value={"Character": "Actor"}
+    )
+
+    mocker.patch(
+        "extract_movie_data.utils.remove_null_bytes",
+        side_effect=lambda x: x
+    )
+
     mock_ws = Mock()
     mock_ws.files.upload = Mock()
 
-    _extract_and_store_movie_data("action", mock_ws, set())
+    already_ids = set()
 
-    # Validate uploaded JSON content
-    args, kwargs = mock_ws.files.upload.call_args
-    uploaded_path = args[0]
-    uploaded_stream = args[1]
+    _extract_and_store_movie_data((("action", 1), 1), mock_ws, already_ids)
 
-    assert uploaded_path.endswith("action_movies.json")
+    assert 123 in already_ids
+    assert mock_ws.files.upload.called
 
-    json_loaded = json.loads(uploaded_stream.getvalue().decode())
-    assert json_loaded == [{"id": 1}]
+    args = mock_ws.files.upload.call_args[0]
+    uploaded_json = json.loads(args[1].getvalue().decode())
+
+    assert uploaded_json == [{
+        "tmdb_id": 123,
+        "title": "Movie",
+        "year": "2020",
+        "script": [{"script": True}],
+        "character_to_actor": {"Character": "Actor"}
+    }]
 
 
-def test__extract_and_store_movie_data_should_not_process(mocker):
+def test__extract_and_store_movie_data_no_movies(mocker):
     mocker.patch(
         "extract_movie_data._extract_script_links",
-        return_value=[("Movie", "2020", "http://example.com/m.pdf")]
+        return_value=[]
     )
 
-    mocker.patch("extract_movie_data._should_process_movie", return_value=False)
-
-    mocker.patch("extract_movie_data.utils.download_pdf", return_value="/tmp/m.pdf")
-
-    mocker.patch("extract_movie_data._extract_script_from_pdf", return_value=[{"script": True}])
-
-    mock_add_movie_data = mocker.patch("extract_movie_data._add_movie_data")
-
-    # Mock Databricks workspace client
     mock_ws = Mock()
     mock_ws.files.upload = Mock()
 
-    _extract_and_store_movie_data("action", mock_ws, set())
+    _extract_and_store_movie_data(("action", 1), mock_ws, set())
 
     assert not mock_ws.files.upload.called
-    assert not mock_add_movie_data.called

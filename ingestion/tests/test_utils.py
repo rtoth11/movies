@@ -1,8 +1,8 @@
-import requests
 from unittest.mock import Mock
 
 import pytest
 
+import extract_movie_data
 from utils import (
     download_pdf,
     _strip_trailing_asterisks,
@@ -19,10 +19,15 @@ def test_download_pdf_success(tmp_path, mocker):
     mock_response.__enter__ = lambda s: s
     mock_response.__exit__ = lambda *args: None
 
-    mocker.patch.object(requests, "get", return_value=mock_response)
+    mock_session = Mock()
+    mock_session.get.return_value = mock_response
 
     output_path = tmp_path / "file.pdf"
-    result = download_pdf("http://example.com/file.pdf", str(output_path))
+    result = download_pdf(
+        "http://example.com/file.pdf",
+        str(output_path),
+        session=mock_session
+    )
 
     assert output_path.read_bytes() == b"PDF-DATA"
     assert result == str(output_path)
@@ -31,12 +36,16 @@ def test_download_pdf_success(tmp_path, mocker):
 def test_download_pdf_fail(mocker):
     mock_response = Mock()
     mock_response.status_code = 404
-    mock_response.__enter__ = lambda s: s
-    mock_response.__exit__ = lambda *args: None
 
-    mocker.patch.object(requests, "get", return_value=mock_response)
+    mock_session = Mock()
+    mock_session.get.return_value = mock_response
 
-    result = download_pdf("http://example.com/file.pdf", "/unused")
+    result = download_pdf(
+        "http://example.com/file.pdf",
+        "dummy_path.pdf",
+        session=mock_session
+    )
+
     assert result is None
 
 
