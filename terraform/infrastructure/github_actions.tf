@@ -1,5 +1,5 @@
-resource "aws_ecr_repository" "ingestion_ecr_repository" {
-  name = var.ingestion_ecr_repo_name
+resource "aws_ecr_repository" "extraction_ecr_repository" {
+  name = var.extraction_ecr_repo_name
   force_delete = true
 }
 
@@ -67,7 +67,7 @@ data "aws_iam_policy_document" "ecr_policy_document" {
     ]
 
     resources = [
-      aws_ecr_repository.ingestion_ecr_repository.arn
+      aws_ecr_repository.extraction_ecr_repository.arn
     ]
   }
 }
@@ -135,7 +135,7 @@ data "aws_iam_policy_document" "lambda_update_function_policy_document" {
     ]
 
     resources = [
-      aws_lambda_function.ingestion_lambda.arn
+      aws_lambda_function.extraction_lambda.arn
     ]
   }
 }

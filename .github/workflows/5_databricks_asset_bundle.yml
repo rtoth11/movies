@@ -1,4 +1,4 @@
-name: Deploy Databricks asset bundle
+name: 5. Deploy Databricks asset bundle
 
 on:
   workflow_dispatch:
@@ -59,7 +59,7 @@ jobs:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           BUNDLE_VAR_movie_data_volume_path: ${{ vars.DATABRICKS_MOVIE_DATA_VOLUME_PATH }}
-          BUNDLE_VAR_secret_scope: "secret-scope"
+          BUNDLE_VAR_secret_scope: ${{ vars.DATABRICKS_SECRET_SCOPE }}
           BUNDLE_VAR_s3_bucket_name: ${{ steps.tf_outputs.outputs.movies_s3_bucket_name }}
         working-directory: "./movies_asset_bundle"
         run: |

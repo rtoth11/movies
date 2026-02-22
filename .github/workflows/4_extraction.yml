@@ -1,4 +1,4 @@
-name: Build and deploy ingestion service
+name: 4. Build and deploy extraction service
 
 on:
   workflow_dispatch:
@@ -40,16 +40,16 @@ jobs:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
         run: |
-          echo "ingestion_ecr_repository_url=$(terraform output -raw ingestion_ecr_repository_url)" >> $GITHUB_OUTPUT
+          echo "extraction_ecr_repository_url=$(terraform output -raw extraction_ecr_repository_url)" >> $GITHUB_OUTPUT
           echo "role_for_infrastructure_update=$(terraform output -raw role_for_infrastructure_update)" >> $GITHUB_OUTPUT
-          echo "ingestion_lambda_function_name=$(terraform output -raw ingestion_lambda_function_name)" >> $GITHUB_OUTPUT
+          echo "extraction_lambda_function_name=$(terraform output -raw extraction_lambda_function_name)" >> $GITHUB_OUTPUT
           echo "pg_port=$(terraform output -raw pg_port)" >> $GITHUB_OUTPUT
           PG_HOST=$(terraform output -raw pg_host)
           echo "::add-mask::$PG_HOST"
           databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_host","string_value":"'"$PG_HOST"'"}'
 
       - name: Read version from file
-        run: echo "INGESTION_VERSION=$(cat ingestion/VERSION)" >> $GITHUB_ENV
+        run: echo "INGESTION_VERSION=$(cat extraction/VERSION)" >> $GITHUB_ENV
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -63,8 +63,8 @@ jobs:
       - name: Set image tags
         id: set_tags
         run: |
-          TAGS="${{ steps.tf_outputs.outputs.ingestion_ecr_repository_url }}:${INGESTION_VERSION}"
-          TAGS="$TAGS,${{ steps.tf_outputs.outputs.ingestion_ecr_repository_url }}:latest"
+          TAGS="${{ steps.tf_outputs.outputs.extraction_ecr_repository_url }}:${INGESTION_VERSION}"
+          TAGS="$TAGS,${{ steps.tf_outputs.outputs.extraction_ecr_repository_url }}:latest"
           echo "TAGS=$TAGS" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
@@ -73,8 +73,8 @@ jobs:
       - name: Build and push image to ECR
         uses: docker/build-push-action@v6
         with:
-          context: ./ingestion
-          file: ./ingestion/Dockerfile
+          context: ./extraction
+          file: ./extraction/Dockerfile
           push: true
           tags: ${{ steps.set_tags.outputs.tags }}
           provenance: false
@@ -85,13 +85,13 @@ jobs:
       - name: Update Lambda function
         run: |
           aws lambda update-function-code \
-            --function-name ${{ steps.tf_outputs.outputs.ingestion_lambda_function_name }} \
-            --image-uri ${{ steps.tf_outputs.outputs.ingestion_ecr_repository_url }}:latest
+            --function-name ${{ steps.tf_outputs.outputs.extraction_lambda_function_name }} \
+            --image-uri ${{ steps.tf_outputs.outputs.extraction_ecr_repository_url }}:latest
 
       - name: Wait for Lambda code update to finish
         run: |
           aws lambda wait function-updated \
-            --function-name ${{ steps.tf_outputs.outputs.ingestion_lambda_function_name }}
+            --function-name ${{ steps.tf_outputs.outputs.extraction_lambda_function_name }}
 
       - name: Get pg_host from Databricks secrets
         env:
@@ -114,10 +114,10 @@ jobs:
           PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
         run: |
           aws lambda update-function-configuration \
-            --function-name ${{ steps.tf_outputs.outputs.ingestion_lambda_function_name }} \
+            --function-name ${{ steps.tf_outputs.outputs.extraction_lambda_function_name }} \
             --environment "Variables={TMDB_API_KEY=$TMDB_API_KEY,DATABRICKS_HOST=$DATABRICKS_HOST,DATABRICKS_TOKEN=$DATABRICKS_TOKEN,PG_HOST=$PG_HOST,PG_PORT=$PG_PORT,PG_DATABASE=$PG_DATABASE,PG_USER=$PG_USER,PG_PASSWORD=$PG_PASSWORD}"
 
       - name: Wait for Lambda configuration update to finish
         run: |
           aws lambda wait function-updated \
-            --function-name ${{ steps.tf_outputs.outputs.ingestion_lambda_function_name }}
+            --function-name ${{ steps.tf_outputs.outputs.extraction_lambda_function_name }}

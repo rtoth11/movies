@@ -1,4 +1,4 @@
-name: Create infrastructure with Terraform
+name: 3. Create infrastructure with Terraform
 
 on:
   workflow_dispatch:

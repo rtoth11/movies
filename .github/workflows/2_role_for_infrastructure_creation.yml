@@ -1,4 +1,4 @@
-name: Create role used for infrastructure creation
+name: 2. Create role used for infrastructure creation
 
 on:
   workflow_dispatch:

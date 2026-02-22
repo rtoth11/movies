@@ -1,4 +1,4 @@
-name: Build and deploy backend and frontend services
+name: 6. Build and deploy backend and frontend services
 
 on:
   workflow_dispatch:

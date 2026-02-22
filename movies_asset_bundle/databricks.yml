@@ -29,7 +29,7 @@ targets:
 
 variables:
   movie_data_volume_path:
-    description: "Path to the movie data volume. This contains the ingested data in JSON format."
+    description: "Path to the movie data volume. This contains the extracted data in JSON format."
   secret_scope:
     description: "The secret scope to use for retrieving sensitive information"
   s3_bucket_name:

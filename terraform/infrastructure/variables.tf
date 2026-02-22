@@ -1,20 +1,20 @@
-variable ingestion_ecr_repo_name {
-  description = "Name for the ingestion ECR repository"
+variable extraction_ecr_repo_name {
+  description = "Name for the ECR repository that will store the extraction Lambda function image"
   type        = string
 }
 
 variable backend_ecr_repo_name {
-  description = "Name for the backend ECR repository"
+  description = "Name for the ECR repository that will store the backend service image"
   type        = string
 }
 
 variable frontend_ecr_repo_name {
-  description = "Name for the frontend ECR repository"
+  description = "Name for the ECR repository that will store the frontend service image"
   type        = string
 }
 
 variable github_repo {
-  description = "GitHub repository in the format 'owner/repo'"
+  description = "GitHub repository in the format 'owner/repo'. This can assume the role with necessary permissions to update infrastructure."
   type        = string
 }
 
@@ -33,18 +33,18 @@ variable movies_s3_bucket_name {
   type        = string
 }
 
-variable ingestion_lambda_role_name {
-  description = "Name for the IAM role that the ingestion Lambda function will assume"
+variable extraction_lambda_role_name {
+  description = "Name for the IAM role that the extraction Lambda function will assume"
   type        = string
 }
 
-variable ingestion_lambda_role_path {
-  description = "Path for the IAM role that the ingestion Lambda function will assume"
+variable extraction_lambda_role_path {
+  description = "Path for the IAM role that the extraction Lambda function will assume"
   type        = string
 }
 
-variable ingestion_lambda_function_name {
-  description = "Name for the ingestion Lambda function"
+variable extraction_lambda_function_name {
+  description = "Name for the extraction Lambda function"
   type        = string
 }
 
@@ -53,23 +53,23 @@ variable region {
   type        = string
 }
 
-variable ingestion_lambda_memory_size {
-  description = "Memory size for the ingestion Lambda function"
+variable extraction_lambda_memory_size {
+  description = "Memory size for the extraction Lambda function"
   type        = number
 }
 
-variable ingestion_lambda_timeout {
-  description = "Timeout for the ingestion Lambda function"
+variable extraction_lambda_timeout {
+  description = "Timeout for the extraction Lambda function"
   type        = number
 }
 
-variable ingestion_event_rule_name {
-  description = "Name for the EventBridge rule that will trigger the ingestion Lambda function"
+variable extraction_event_rule_name {
+  description = "Name for the EventBridge rule that will trigger the extraction Lambda function"
   type        = string
 }
 
-variable ingestion_event_schedule_expression {
-  description = "Schedule expression for the EventBridge rule that will trigger the ingestion Lambda function"
+variable extraction_event_schedule_expression {
+  description = "Schedule expression for the EventBridge rule that will trigger the extraction Lambda function"
   type        = string
 }
 
