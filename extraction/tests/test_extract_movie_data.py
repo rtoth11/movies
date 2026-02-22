@@ -350,7 +350,7 @@ def test__should_process_movie_movie_already_stored(mocker):
         return_value={"results": [{"title": "Movie", "id": 123}]}
     )
 
-    result = _should_process_movie("Movie", "2020", {123})
+    result = _should_process_movie("Movie", "2020", {("Movie", "2020")})
     assert result is None
 
 
@@ -585,11 +585,11 @@ def test__extract_and_store_movie_data(mocker):
     mock_ws = Mock()
     mock_ws.files.upload = Mock()
 
-    already_ids = set()
+    already_stored = set()
 
-    _extract_and_store_movie_data((("action", 1), 1), mock_ws, already_ids)
+    _extract_and_store_movie_data((("action", 1), 1), mock_ws, already_stored)
 
-    assert 123 in already_ids
+    assert ("Movie", "2020") in already_stored
     assert mock_ws.files.upload.called
 
     args = mock_ws.files.upload.call_args[0]
