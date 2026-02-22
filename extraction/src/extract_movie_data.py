@@ -249,8 +249,13 @@ def _extract_script_from_pdf(pdf_path: str) -> list[dict]:
     return blocks
 
 
-def _should_process_movie(movie_title: str, movie_year: str, already_stored_movie_ids: set[int]) \
-        -> Optional[int]:
+def _should_process_movie(movie_title: str,
+                          movie_year: str,
+                          already_stored_movies: set[tuple[str, str]]) -> Optional[int]:
+    if (movie_title, movie_year) in already_stored_movies:
+        logging.debug(f"The {movie_title} ({movie_year}) movie is already stored. Skipping it.")
+        return None
+
     response = tmdb_search.movie(query=movie_title, year=movie_year)
     candidate_movies = [
         movie for movie in response["results"]
@@ -268,15 +273,10 @@ def _should_process_movie(movie_title: str, movie_year: str, already_stored_movi
             f"Multiple candidates for the {movie_title} ({movie_year}) movie. Skipping it.")
         return None
 
-    if candidate_movies[0]["id"] in already_stored_movie_ids:
-        logging.debug(
-            f"The {movie_title} ({movie_year}) movie is already stored. Skipping it.")
-        return None
-
     return candidate_movies[0]["id"]
 
 
-def _extract_script_links(genre: tuple[str, int], already_stored_movie_ids: set[int]) \
+def _extract_script_links(genre: tuple[str, int], already_stored_movies: set[tuple[str, str]]) \
         -> list[tuple[int, str, str, str]]:
     logging.info("Extracting script links.")
 
@@ -315,7 +315,7 @@ def _extract_script_links(genre: tuple[str, int], already_stored_movie_ids: set[
             continue
         checked_script_pages.add(script_page_link)
 
-        movie_tmdb_id = _should_process_movie(movie_title, movie_year, already_stored_movie_ids)
+        movie_tmdb_id = _should_process_movie(movie_title, movie_year, already_stored_movies)
         if movie_tmdb_id is None:
             continue
 
@@ -342,14 +342,14 @@ def _extract_script_links(genre: tuple[str, int], already_stored_movie_ids: set[
 
 def _extract_and_store_movie_data(genre: tuple[str, int],
                                   workspace_client: WorkspaceClient,
-                                  already_stored_movie_ids: set):
+                                  already_stored_movies: set[tuple[str, str]]):
     all_movies = []
     i = 1
     genre_name = genre[0]
 
     logging.info(f"Extracting movie data for genre '{genre_name}'.")
 
-    script_links = _extract_script_links(genre, already_stored_movie_ids)
+    script_links = _extract_script_links(genre, already_stored_movies)
 
     logging.info(f"Found {len(script_links)} scripts for genre '{genre_name}'.")
 
@@ -371,7 +371,7 @@ def _extract_and_store_movie_data(genre: tuple[str, int],
         }
 
         all_movies.append(movie_data)
-        already_stored_movie_ids.add(movie_tmdb_id)
+        already_stored_movies.add((movie_title, movie_year))
         i += 1
 
     if len(all_movies) == 0:
@@ -401,10 +401,10 @@ def handler(event, context):
     else:
         workspace_client = WorkspaceClient()
 
-    already_stored_movie_ids = utils.get_already_stored_movies()
+    already_stored_movies = utils.get_already_stored_movies()
 
     for genre in GENRES:
-        _extract_and_store_movie_data(genre, workspace_client, already_stored_movie_ids)
+        _extract_and_store_movie_data(genre, workspace_client, already_stored_movies)
 
 
 if __name__ == "__main__":

@@ -106,7 +106,7 @@ def create_character_actor_map(script_data: list[dict], cast: list[dict]) -> lis
     return result
 
 
-def get_already_stored_movies() -> set[int]:
+def get_already_stored_movies() -> set[tuple[str, str]]:
     pg_conn = psycopg2.connect(
         host=os.getenv("PG_HOST"),
         port=int(os.getenv("PG_PORT")),
@@ -118,9 +118,9 @@ def get_already_stored_movies() -> set[int]:
 
     try:
         with pg_conn.cursor() as cursor:
-            cursor.execute(f'SELECT tmdb_id FROM "{schema_name}"."silver_movies";')
+            cursor.execute(f'SELECT title, year FROM "{schema_name}"."silver_movies";')
             rows = cursor.fetchall()
-            return {row[0] for row in rows}
+            return set((row[0], row[1]) for row in rows)
     except (psycopg2.errors.UndefinedTable,
             psycopg2.errors.InvalidSchemaName) as e:
         logging.warning(f"Table or schema missing: {e}.")
