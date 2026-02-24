@@ -20,21 +20,22 @@ Free edition of Databricks is sufficient.
 
 ## Extraction
 
-Data is extracted via AWS Lambda function into JSON files that are uploaded to a Databricks volume. The Lambda runs on a defined schedule so it can gather data of newly
-added movies.
+Data is extracted on an EC2 instance into JSON files that are uploaded to a Databricks volume. The EC2 is started on a defined schedule so it can gather data of newly
+added movies too. Logs are written to CloudWatch.
 
 ## Databricks
 
-We have a Databricks asset bundle with a job that transforms the uploaded data, moves the transformed data to S3, then loads it into the Postgres db.
+We have a Databricks asset bundle with a job that transforms the uploaded data, moves the transformed data as CSV files to S3, then loads them into the Postgres db.
 The uploaded JSON files are retained in a separate volume.
 
 ## Storage
 
-An S3 bucket is used to store the Lambda logs and the temporary CSV files that are loaded into the Postgres db.
+An S3 bucket is used to store the temporary CSV files that are loaded into the Postgres db.
 
 ## Web application
 
 Backend and frontend run on an ECS cluster as Fargate tasks. An EC2 NAT instance is used to make the website publicly accessible. Backend gets data from the Postgres db.
+Logs are written to CloudWatch.
 
 
 # Configuration
@@ -81,6 +82,8 @@ GitHub variables required:
 - DATABRICKS_MOVIE_DATA_VOLUME_PATH: where to upload files in Databricks (must be created manually)
 - DATABRICKS_SECRET_SCOPE: name for the Databricks secret scope that we use to pass sensitive data to the Databricks asset bundle
 - DEPLOY_BACKEND_AND_FRONTEND: whether to deploy the backend and frontend services (true/false)
+- GENRES: for testing purposes only. A comma-separated list of genres that the extraction EC2 instance will gather data for (for valid values, see _extraction/src/extract\_movie\_data_).
+- NUMBER_OF_MOVIES: for testing purposes only. The number of new (currently not stored) movies to be extracted per genre.
 
 ## Databricks
 

@@ -124,32 +124,6 @@ resource "aws_iam_role_policy_attachment" "attach_ecr_public" {
   policy_arn = aws_iam_policy.ecr_public_policy.arn
 }
 
-data "aws_iam_policy_document" "lambda_update_function_policy_document" {
-  statement {
-    effect = "Allow"
-
-    actions = [
-      "lambda:UpdateFunctionCode",
-      "lambda:UpdateFunctionConfiguration",
-      "lambda:GetFunctionConfiguration"
-    ]
-
-    resources = [
-      aws_lambda_function.extraction_lambda.arn
-    ]
-  }
-}
-
-resource "aws_iam_policy" "lambda_update_function_policy" {
-  name   = "lambda-update-function-policy"
-  policy = data.aws_iam_policy_document.lambda_update_function_policy_document.json
-}
-
-resource "aws_iam_role_policy_attachment" "attach_lambda_update_function" {
-  role       = aws_iam_role.role_for_infrastructure_update.name
-  policy_arn = aws_iam_policy.lambda_update_function_policy.arn
-}
-
 data "aws_iam_policy_document" "update_ecs_task_definition_policy_document" {
   statement {
     effect = "Allow"
@@ -175,4 +149,28 @@ resource "aws_iam_policy" "update_ecs_task_definition_policy" {
 resource "aws_iam_role_policy_attachment" "attach_update_ecs_task_definition_to_github_role" {
   role       = aws_iam_role.role_for_infrastructure_update.name
   policy_arn = aws_iam_policy.update_ecs_task_definition_policy.arn
+}
+
+data "aws_iam_policy_document" "ssm_policy_document" {
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ssm:PutParameter"
+    ]
+
+    resources = [
+      "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/*"
+    ]
+  }
+}
+
+resource "aws_iam_policy" "ssm_policy" {
+  name   = "github-actions-ssm-policy"
+  policy = data.aws_iam_policy_document.ssm_policy_document.json
+}
+
+resource "aws_iam_role_policy_attachment" "attach_ssm_policy_to_github_role" {
+  role       = aws_iam_role.role_for_infrastructure_update.name
+  policy_arn = aws_iam_policy.ssm_policy.arn
 }

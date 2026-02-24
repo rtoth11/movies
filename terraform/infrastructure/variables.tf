@@ -1,5 +1,5 @@
 variable extraction_ecr_repo_name {
-  description = "Name for the ECR repository that will store the extraction Lambda function image"
+  description = "Name for the ECR repository that will store the extraction image"
   type        = string
 }
 
@@ -33,18 +33,18 @@ variable movies_s3_bucket_name {
   type        = string
 }
 
-variable extraction_lambda_role_name {
-  description = "Name for the IAM role that the extraction Lambda function will assume"
+variable extraction_ec2_role_name {
+  description = "Name for the IAM role that the extraction EC2 instance will assume"
   type        = string
 }
 
-variable extraction_lambda_role_path {
-  description = "Path for the IAM role that the extraction Lambda function will assume"
+variable extraction_ec2_role_path {
+  description = "Path for the IAM role that the extraction EC2 instance will assume"
   type        = string
 }
 
-variable extraction_lambda_function_name {
-  description = "Name for the extraction Lambda function"
+variable extraction_event_bridge_role_name {
+  description = "Name for the IAM role that the EventBridge rule will assume to start the extraction EC2 instance"
   type        = string
 }
 
@@ -53,23 +53,13 @@ variable region {
   type        = string
 }
 
-variable extraction_lambda_memory_size {
-  description = "Memory size for the extraction Lambda function"
-  type        = number
-}
-
-variable extraction_lambda_timeout {
-  description = "Timeout for the extraction Lambda function"
-  type        = number
-}
-
 variable extraction_event_rule_name {
-  description = "Name for the EventBridge rule that will trigger the extraction Lambda function"
+  description = "Name for the EventBridge rule that will start the extraction EC2 instance"
   type        = string
 }
 
 variable extraction_event_schedule_expression {
-  description = "Schedule expression for the EventBridge rule that will trigger the extraction Lambda function"
+  description = "Schedule expression for the EventBridge rule that will start the extraction EC2 instance"
   type        = string
 }
 

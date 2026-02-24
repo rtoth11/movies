@@ -18,11 +18,6 @@ output "role_for_infrastructure_update" {
   value       = aws_iam_role.role_for_infrastructure_update.arn
 }
 
-output "extraction_lambda_function_name" {
-  description = "The name of the extraction Lambda function."
-  value       = aws_lambda_function.extraction_lambda.function_name
-}
-
 output "movies_s3_bucket_name" {
   description = "The name of the S3 bucket used for movie data storage."
   value       = aws_s3_bucket.movies_s3_bucket.bucket

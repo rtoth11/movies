@@ -111,8 +111,17 @@ data "aws_iam_policy_document" "first_terraform_policy_document" {
       "ec2:DescribeLaunchTemplateVersions",
       "ec2:DescribeAutoScalingGroups",
       "ec2:DescribeTags",
+      "ec2:DescribeInstances",
+      "ec2:DescribeInstanceTypes",
+      "ec2:DescribeInstanceStatus",
+      "ec2:DescribeInstanceAttribute",
+      "ec2:DescribeInstanceCreditSpecifications",
+      "ec2:DescribeVolumes",
+      "ec2:StartInstances",
       "ec2:RunInstances",
+      "ec2:StopInstances",
       "ec2:TerminateInstances",
+      "ec2:ModifyInstanceAttribute",
       "rds:CreateDBInstance",
       "rds:ModifyDBInstance",
       "rds:DeleteDBInstance",
@@ -158,7 +167,10 @@ data "aws_iam_policy_document" "first_terraform_policy_document" {
       "logs:DeleteLogGroup",
       "logs:PutRetentionPolicy",
       "logs:DescribeLogGroups",
-      "logs:ListTagsForResource"
+      "logs:ListTagsForResource",
+      "ssm:GetParameters",
+      "ssm:DescribeParameters",
+      "ssm:ListTagsForResource"
     ]
     resources = ["*"]
   }
@@ -257,31 +269,6 @@ data "aws_iam_policy_document" "second_terraform_policy_document" {
 
     resources = [
       "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/*"
-    ]
-  }
-
-  statement {
-    effect = "Allow"
-
-    actions = [
-      "lambda:AddPermission",
-      "lambda:CreateFunction",
-      "lambda:DeleteFunction",
-      "lambda:GetFunction",
-      "lambda:GetPolicy",
-      "lambda:ListVersionsByFunction",
-      "lambda:RemovePermission",
-      "lambda:UpdateFunctionCode",
-      "lambda:GetFunctionEventInvokeConfig",
-      "lambda:PutFunctionEventInvokeConfig",
-      "lambda:ListFunctionEventInvokeConfigs",
-      "lambda:DeleteFunctionEventInvokeConfig",
-      "lambda:UpdateFunctionEventInvokeConfig",
-      "lambda:UpdateFunctionConfiguration"
-    ]
-
-    resources = [
-      "arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:*"
     ]
   }
 
@@ -419,6 +406,20 @@ data "aws_iam_policy_document" "second_terraform_policy_document" {
 
     resources = [
       "arn:aws:autoscaling:${var.region}:${data.aws_caller_identity.current.account_id}:autoScalingGroup:*:autoScalingGroupName/*"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "ssm:GetParameter",
+      "ssm:PutParameter",
+      "ssm:DeleteParameter"
+    ]
+
+    resources = [
+      "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/*"
     ]
   }
 }

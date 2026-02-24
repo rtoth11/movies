@@ -14,16 +14,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Databricks CLI
-        uses: databricks/setup-cli@main
-
-      - name: Create secret scope in Databricks
-        env:
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-        run: |
-          databricks secrets create-scope secret-scope || echo "Scope already exists"
-
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -36,20 +26,10 @@ jobs:
       - name: Read Terraform outputs
         id: tf_outputs
         working-directory: "./terraform/infrastructure"
-        env:
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
         run: |
           echo "extraction_ecr_repository_url=$(terraform output -raw extraction_ecr_repository_url)" >> $GITHUB_OUTPUT
           echo "role_for_infrastructure_update=$(terraform output -raw role_for_infrastructure_update)" >> $GITHUB_OUTPUT
-          echo "extraction_lambda_function_name=$(terraform output -raw extraction_lambda_function_name)" >> $GITHUB_OUTPUT
-          echo "pg_port=$(terraform output -raw pg_port)" >> $GITHUB_OUTPUT
-          PG_HOST=$(terraform output -raw pg_host)
-          echo "::add-mask::$PG_HOST"
-          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_host","string_value":"'"$PG_HOST"'"}'
-
-      - name: Read version from file
-        run: echo "INGESTION_VERSION=$(cat extraction/VERSION)" >> $GITHUB_ENV
+          echo "pg_host=$(terraform output -raw pg_host)" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -57,13 +37,82 @@ jobs:
           role-to-assume: ${{ steps.tf_outputs.outputs.role_for_infrastructure_update }}
           aws-region: us-east-1
 
+      - name: Update SSM Parameters
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          PG_HOST: ${{ steps.tf_outputs.outputs.pg_host }}
+          PG_DATABASE: ${{ secrets.PG_DATABASE }}
+          PG_USER: ${{ secrets.PG_USER }}
+          PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
+          GENRES: ${{ vars.GENRES }}
+          NUMBER_OF_MOVIES: ${{ vars.NUMBER_OF_MOVIES }}
+        run: |
+          aws ssm put-parameter \
+            --name "/extraction/TMDB_API_KEY" \
+            --value "$TMDB_API_KEY" \
+            --type "SecureString" \
+            --overwrite
+
+          aws ssm put-parameter \
+            --name "/extraction/DATABRICKS_HOST" \
+            --value "$DATABRICKS_HOST" \
+            --type "SecureString" \
+            --overwrite
+
+          aws ssm put-parameter \
+            --name "/extraction/DATABRICKS_TOKEN" \
+            --value "$DATABRICKS_TOKEN" \
+            --type "SecureString" \
+            --overwrite
+
+          aws ssm put-parameter \
+            --name "/extraction/PG_HOST" \
+            --value "$PG_HOST" \
+            --type "SecureString" \
+            --overwrite
+
+          aws ssm put-parameter \
+            --name "/extraction/PG_DATABASE" \
+            --value "$PG_DATABASE" \
+            --type "SecureString" \
+            --overwrite
+
+          aws ssm put-parameter \
+            --name "/extraction/PG_USER" \
+            --value "$PG_USER" \
+            --type "SecureString" \
+            --overwrite
+
+          aws ssm put-parameter \
+            --name "/extraction/PG_PASSWORD" \
+            --value "$PG_PASSWORD" \
+            --type "SecureString" \
+            --overwrite
+
+          aws ssm put-parameter \
+            --name "/extraction/GENRES" \
+            --value "$GENRES" \
+            --type "String" \
+            --overwrite
+
+          aws ssm put-parameter \
+            --name "/extraction/NUMBER_OF_MOVIES" \
+            --value "$NUMBER_OF_MOVIES" \
+            --type "String" \
+            --overwrite
+
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Read version from file
+        run: echo "EXTRACTION_VERSION=$(cat extraction/VERSION)" >> $GITHUB_ENV
 
       - name: Set image tags
         id: set_tags
         run: |
-          TAGS="${{ steps.tf_outputs.outputs.extraction_ecr_repository_url }}:${INGESTION_VERSION}"
+          TAGS="${{ steps.tf_outputs.outputs.extraction_ecr_repository_url }}:${EXTRACTION_VERSION}"
           TAGS="$TAGS,${{ steps.tf_outputs.outputs.extraction_ecr_repository_url }}:latest"
           echo "TAGS=$TAGS" >> $GITHUB_OUTPUT
 
@@ -78,46 +127,5 @@ jobs:
           push: true
           tags: ${{ steps.set_tags.outputs.tags }}
           provenance: false
-          platforms: linux/arm64
           build-args: |
             DATABRICKS_MOVIE_DATA_VOLUME_PATH=${{ vars.DATABRICKS_MOVIE_DATA_VOLUME_PATH }}
-
-      - name: Update Lambda function
-        run: |
-          aws lambda update-function-code \
-            --function-name ${{ steps.tf_outputs.outputs.extraction_lambda_function_name }} \
-            --image-uri ${{ steps.tf_outputs.outputs.extraction_ecr_repository_url }}:latest
-
-      - name: Wait for Lambda code update to finish
-        run: |
-          aws lambda wait function-updated \
-            --function-name ${{ steps.tf_outputs.outputs.extraction_lambda_function_name }}
-
-      - name: Get pg_host from Databricks secrets
-        env:
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-        run: |
-          PG_HOST=$(databricks secrets get-secret secret-scope pg_host | jq -r .value | base64 --decode)
-          echo "PG_HOST=$PG_HOST" >> $GITHUB_ENV
-          echo "::add-mask::$PG_HOST"
-
-      - name: Update Lambda function environment variables
-        env:
-          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          PG_HOST: ${{ env.PG_HOST }}
-          PG_PORT: ${{ steps.tf_outputs.outputs.pg_port }}
-          PG_DATABASE: ${{ secrets.PG_DATABASE }}
-          PG_USER: ${{ secrets.PG_USER }}
-          PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
-        run: |
-          aws lambda update-function-configuration \
-            --function-name ${{ steps.tf_outputs.outputs.extraction_lambda_function_name }} \
-            --environment "Variables={TMDB_API_KEY=$TMDB_API_KEY,DATABRICKS_HOST=$DATABRICKS_HOST,DATABRICKS_TOKEN=$DATABRICKS_TOKEN,PG_HOST=$PG_HOST,PG_PORT=$PG_PORT,PG_DATABASE=$PG_DATABASE,PG_USER=$PG_USER,PG_PASSWORD=$PG_PASSWORD}"
-
-      - name: Wait for Lambda configuration update to finish
-        run: |
-          aws lambda wait function-updated \
-            --function-name ${{ steps.tf_outputs.outputs.extraction_lambda_function_name }}
