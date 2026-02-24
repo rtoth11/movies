@@ -18,10 +18,39 @@ from get_scripts_request import json_data
 from script_verification import write_blocks_to_txt
 import utils
 
-GENRES = [
+SELECTED_GENRES = os.getenv("GENRES")
+ALL_GENRES = [
     ("action", 10540),
-    ("adventure", 10541)
+    ("adventure", 10541),
+    ("animation", 10546),
+    ("biography", 10535),
+    ("comedy", 10532),
+    ("crime", 10542),
+    ("drama", 10533),
+    ("family", 10547),
+    ("fantasy", 10543),
+    ("film-noir", 10550),
+    ("history", 10536),
+    ("holiday", 10554),
+    ("horror", 10538),
+    ("music", 10549),
+    ("musical", 10552),
+    ("mystery", 10544),
+    ("romance", 10534),
+    ("science-fiction", 10539),
+    ("short", 10555),
+    ("sport", 10537),
+    ("superhero", 10553),
+    ("thriller", 10545),
+    ("war", 10548),
+    ("western", 10551)
 ]
+if SELECTED_GENRES is not None:
+    GENRES = [genre for genre in ALL_GENRES if genre[0] in SELECTED_GENRES.split(",")]
+else:
+    GENRES = ALL_GENRES
+
+NUMBER_OF_MOVIES = os.getenv("NUMBER_OF_MOVIES")
 
 SCRIPTS_WEBSITE = "https://www.scriptslug.com"
 SCRIPTS_API_LINK = "https://www.scriptslug.com/gql"
@@ -334,8 +363,8 @@ def _extract_script_links(genre: tuple[str, int], already_stored_movies: set[tup
         else:
             logging.warning(f"No script link found on page: {script_page_link}.")
 
-        if len(script_links) > 20:
-            break # TODO: remove
+        if NUMBER_OF_MOVIES is not None and len(script_links) > int(NUMBER_OF_MOVIES):
+            break
 
     return script_links
 
@@ -390,8 +419,11 @@ def _extract_and_store_movie_data(genre: tuple[str, int],
     logging.info("Movie data upload complete.")
 
 
-def handler(event, context):
+def main():
     logging.getLogger().setLevel(logging.INFO)
+
+    logging.info(f"Selected genres: {SELECTED_GENRES}")
+    logging.info(f"Number of movies per genre: {NUMBER_OF_MOVIES}")
 
     databricks_host = os.getenv("DATABRICKS_HOST")
     databricks_token = os.getenv("DATABRICKS_TOKEN")
@@ -408,4 +440,4 @@ def handler(event, context):
 
 
 if __name__ == "__main__":
-    handler(None, None)
+    main()

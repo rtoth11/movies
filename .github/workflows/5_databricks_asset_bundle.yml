@@ -33,6 +33,13 @@ jobs:
       - name: Set up Databricks CLI
         uses: databricks/setup-cli@main
 
+      - name: Create secret scope in Databricks
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: |
+          databricks secrets create-scope ${{ vars.DATABRICKS_SECRET_SCOPE }} || echo "Scope already exists"
+
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
@@ -46,13 +53,14 @@ jobs:
           PG_DATABASE: ${{ secrets.PG_DATABASE }}
           PG_USER: ${{ secrets.PG_USER }}
           PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
+          SECRET_SCOPE: ${{ vars.DATABRICKS_SECRET_SCOPE }}
         run: |
-          databricks secrets put-secret --json '{"scope":"secret-scope","key":"aws_access_key_id","string_value":"'"$AWS_ACCESS_KEY_ID"'"}'
-          databricks secrets put-secret --json '{"scope":"secret-scope","key":"aws_secret_access_key","string_value":"'"$AWS_SECRET_ACCESS_KEY"'"}'
-          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_port","string_value":"'"$PG_PORT"'"}'
-          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_database","string_value":"'"$PG_DATABASE"'"}'
-          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_user","string_value":"'"$PG_USER"'"}'
-          databricks secrets put-secret --json '{"scope":"secret-scope","key":"pg_password","string_value":"'"$PG_PASSWORD"'"}'
+          databricks secrets put-secret --json '{"scope":"'"$SECRET_SCOPE"'","key":"aws_access_key_id","string_value":"'"$AWS_ACCESS_KEY_ID"'"}'
+          databricks secrets put-secret --json '{"scope":"'"$SECRET_SCOPE"'","key":"aws_secret_access_key","string_value":"'"$AWS_SECRET_ACCESS_KEY"'"}'
+          databricks secrets put-secret --json '{"scope":"'"$SECRET_SCOPE"'","key":"pg_port","string_value":"'"$PG_PORT"'"}'
+          databricks secrets put-secret --json '{"scope":"'"$SECRET_SCOPE"'","key":"pg_database","string_value":"'"$PG_DATABASE"'"}'
+          databricks secrets put-secret --json '{"scope":"'"$SECRET_SCOPE"'","key":"pg_user","string_value":"'"$PG_USER"'"}'
+          databricks secrets put-secret --json '{"scope":"'"$SECRET_SCOPE"'","key":"pg_password","string_value":"'"$PG_PASSWORD"'"}'
 
       - name: Deploy movies asset bundle
         env:

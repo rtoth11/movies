@@ -1,3 +1,8 @@
+resource "aws_s3_bucket" "movies_s3_bucket" {
+  bucket = var.movies_s3_bucket_name
+  force_destroy = true
+}
+
 resource "aws_vpc" "movies_vpc" {
   cidr_block       = "10.0.0.0/16"
   instance_tenancy = "default"
