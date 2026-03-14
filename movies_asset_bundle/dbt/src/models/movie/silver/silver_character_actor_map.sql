@@ -1,7 +1,6 @@
 {{ config(
     materialized = 'incremental',
-    incremental_strategy = 'append',
-    unique_key = ['movie_tmdb_id', 'actor_tmdb_id', 'character_name']
+    incremental_strategy = 'append'
 ) }}
 
 with source as (

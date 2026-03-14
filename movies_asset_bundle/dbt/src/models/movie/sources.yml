@@ -4,3 +4,15 @@ sources:
     schema: "{{ var('bronze_schema_name') }}"
     tables:
       - name: bronze_json_movies
+        description: "This table contains the raw JSON data for movies, ingested from the source systems."
+        columns:
+          - name: tmdb_id
+            description: "The unique identifier for the movie in the TMDB database."
+          - name: title
+            description: "The title of the movie."
+          - name: year
+            description: "The release year of the movie."
+          - name: script
+            description: "The script of the movie given as a list of script blocks."
+          - name: character_to_actor
+            description: "The mapping between the characters and actors of the movie."

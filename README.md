@@ -96,21 +96,3 @@ Default values:
 - bronze_schema_name: _bronze_ (the uploaded JSON files are loaded into the _bronze\_json\_movies_ table inside this schema)
 
 We can also set the schedule for the asset bundle job here. By default, it runs once a day.
-
-
-# Screenshots
-
-## Search
-<img width="1000" alt="search" src="docs/images/search.png" />
-
-## Movie
-<<img width="1000" alt="movie" src="docs/images/movie.png" />
-
-## Dialogues
-<img width="1000" alt="dialogues" src="docs/images/dialogues.png" />
-
-## Actor
-<img width="1000" alt="actor" src="docs/images/actor.png" />
-
-## Script
-<img width="800" alt="script" src="docs/images/script.png" />
