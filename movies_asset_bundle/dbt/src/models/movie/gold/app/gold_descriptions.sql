@@ -1,8 +1,3 @@
-{{ config(
-    materialized = 'incremental',
-    incremental_strategy = 'append'
-) }}
-
 with source as (
     select
         md5(concat_ws('||', movie_tmdb_id, index_in_script)) as id,

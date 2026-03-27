@@ -1,15 +1,7 @@
-{{ config(
-    materialized = 'incremental',
-    incremental_strategy = 'append'
-) }}
-
 with source as (
     select
         md5(concat_ws('||', character_name, actor_tmdb_id, movie_tmdb_id)) as id,
-        character_name as name,
-        actor_tmdb_id,
-        movie_tmdb_id,
-        current_timestamp() as inserted_at
+        character_name as name
     from {{ ref('silver_character_actor_map') }}
 )
 

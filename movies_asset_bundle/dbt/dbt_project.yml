@@ -19,3 +19,7 @@ models:
   movies_project:
     movie:
       +materialized: incremental
+      +incremental_strategy: append
+      gold:
+        analytics:
+          +schema: "analytics"

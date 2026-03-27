@@ -1,17 +1,12 @@
-{{ config(
-    materialized = 'incremental',
-    incremental_strategy = 'append'
-) }}
-
 with source as (
     select
         md5(concat_ws('||', movie_tmdb_id, index_in_script)) as id,
         index_in_script,
-        content as scene,
+        content,
         movie_tmdb_id,
         current_timestamp() as inserted_at
     from {{ ref('silver_script_blocks') }}
-    where type = 'scene'
+    where type = 'unknown'
 )
 
 select source.*
