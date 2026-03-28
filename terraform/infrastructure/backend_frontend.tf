@@ -9,7 +9,7 @@ resource "aws_subnet" "private" {
   }
 }
 
-resource "aws_security_group" "backend_sg" {
+resource "aws_security_group" "alb_sg" {
   count = var.deploy_backend_and_frontend ? 1 : 0
   name   = "alb-sg"
   vpc_id = aws_vpc.movies_vpc.id
@@ -41,14 +41,14 @@ resource "aws_security_group" "ecs_sg" {
     from_port       = 5000
     to_port         = 5000
     protocol        = "tcp"
-    security_groups = [aws_security_group.backend_sg[0].id]
+    security_groups = [aws_security_group.alb_sg[0].id]
   }
 
   ingress {
     from_port       = 80
     to_port         = 80
     protocol        = "tcp"
-    security_groups = [aws_security_group.backend_sg[0].id]
+    security_groups = [aws_security_group.alb_sg[0].id]
   }
 
   egress {
@@ -68,7 +68,7 @@ resource "aws_lb" "movies_alb" {
   name               = "movies-alb"
   load_balancer_type = "application"
   subnets            = aws_subnet.public[*].id
-  security_groups    = [aws_security_group.backend_sg[0].id]
+  security_groups    = [aws_security_group.alb_sg[0].id]
 }
 
 resource "aws_lb_target_group" "frontend" {
