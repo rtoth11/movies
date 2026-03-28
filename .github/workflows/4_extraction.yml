@@ -29,7 +29,6 @@ jobs:
         run: |
           echo "extraction_ecr_repository_url=$(terraform output -raw extraction_ecr_repository_url)" >> $GITHUB_OUTPUT
           echo "role_for_infrastructure_update=$(terraform output -raw role_for_infrastructure_update)" >> $GITHUB_OUTPUT
-          echo "pg_host=$(terraform output -raw pg_host)" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -42,10 +41,6 @@ jobs:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          PG_HOST: ${{ steps.tf_outputs.outputs.pg_host }}
-          PG_DATABASE: ${{ secrets.PG_DATABASE }}
-          PG_USER: ${{ secrets.PG_USER }}
-          PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
           GENRES: ${{ vars.GENRES }}
           NUMBER_OF_MOVIES: ${{ vars.NUMBER_OF_MOVIES }}
         run: |
@@ -64,30 +59,6 @@ jobs:
           aws ssm put-parameter \
             --name "/extraction/DATABRICKS_TOKEN" \
             --value "$DATABRICKS_TOKEN" \
-            --type "SecureString" \
-            --overwrite
-
-          aws ssm put-parameter \
-            --name "/extraction/PG_HOST" \
-            --value "$PG_HOST" \
-            --type "SecureString" \
-            --overwrite
-
-          aws ssm put-parameter \
-            --name "/extraction/PG_DATABASE" \
-            --value "$PG_DATABASE" \
-            --type "SecureString" \
-            --overwrite
-
-          aws ssm put-parameter \
-            --name "/extraction/PG_USER" \
-            --value "$PG_USER" \
-            --type "SecureString" \
-            --overwrite
-
-          aws ssm put-parameter \
-            --name "/extraction/PG_PASSWORD" \
-            --value "$PG_PASSWORD" \
             --type "SecureString" \
             --overwrite
 

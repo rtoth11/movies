@@ -142,6 +142,7 @@ data "aws_iam_policy_document" "first_terraform_policy_document" {
       "elasticloadbalancing:DescribeListeners",
       "elasticloadbalancing:DescribeListenerAttributes",
       "elasticloadbalancing:DescribeRules",
+      "elasticloadbalancing:DescribeTargetHealth",
       "ecs:ListClusters",
       "ecs:DescribeClusters",
       "ecs:DescribeServices",
@@ -255,7 +256,10 @@ data "aws_iam_policy_document" "second_terraform_policy_document" {
     effect = "Allow"
 
     actions = [
+      "iam:GetRolePolicy",
       "iam:AttachRolePolicy",
+      "iam:PutRolePolicy",
+      "iam:DeleteRolePolicy",
       "iam:CreateRole",
       "iam:DeleteRole",
       "iam:DetachRolePolicy",
