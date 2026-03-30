@@ -34,7 +34,7 @@ An S3 bucket is used to store the temporary CSV files that are loaded into the P
 
 ## Web application
 
-Backend and frontend run on an ECS cluster as Fargate tasks. An EC2 NAT instance is used to make the website publicly accessible. Backend gets data from the Postgres db.
+Backend and frontend run on EC2 instances. An EC2 NAT instance is used to make the website publicly accessible. Backend gets data from the Postgres db.
 Logs are written to CloudWatch.
 
 
