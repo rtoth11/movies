@@ -103,7 +103,7 @@ jobs:
             --query "Command.CommandId" \
             --output text \
             --parameters 'commands=[
-              "PG_HOST=$(aws ssm get-parameter --name /movies/PG_HOST --with-decryption --query Parameter.Value --output text --region ${{ steps.tf_outputs.outputs.aws_region }}) && \
+              "PG_HOST=$(aws ssm get-parameter --name /extraction/PG_HOST --with-decryption --query Parameter.Value --output text --region ${{ steps.tf_outputs.outputs.aws_region }}) && \
               docker stop backend || true && \
               docker rm backend || true && \
               docker pull ${{ steps.tf_outputs.outputs.backend_ecr_repository_url }}:latest && \

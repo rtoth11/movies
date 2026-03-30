@@ -1,9 +1,3 @@
-resource "aws_ssm_parameter" "pg_host" {
-  name  = "/movies/PG_HOST"
-  type  = "SecureString"
-  value = aws_db_instance.postgres_instance.address
-}
-
 data "aws_iam_policy_document" "ec2_assume_role" {
   statement {
     effect = "Allow"

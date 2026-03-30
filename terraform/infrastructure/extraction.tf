@@ -183,6 +183,8 @@ resource "aws_instance" "extraction_instance" {
     ACCOUNT_ID=${data.aws_caller_identity.current.account_id}
     REPO=${aws_ecr_repository.extraction_ecr_repository.repository_url}
 
+    PG_PORT=${aws_db_instance.postgres_instance.port}
+
     TMDB_API_KEY=$(aws ssm get-parameter \
       --name "/extraction/TMDB_API_KEY" \
       --with-decryption \
@@ -199,6 +201,34 @@ resource "aws_instance" "extraction_instance" {
 
     DATABRICKS_TOKEN=$(aws ssm get-parameter \
       --name "/extraction/DATABRICKS_TOKEN" \
+      --with-decryption \
+      --query "Parameter.Value" \
+      --output text \
+      --region $REGION)
+
+    PG_HOST=$(aws ssm get-parameter \
+      --name "/extraction/PG_HOST" \
+      --with-decryption \
+      --query "Parameter.Value" \
+      --output text \
+      --region $REGION)
+
+    PG_DATABASE=$(aws ssm get-parameter \
+      --name "/extraction/PG_DATABASE" \
+      --with-decryption \
+      --query "Parameter.Value" \
+      --output text \
+      --region $REGION)
+
+    PG_USER=$(aws ssm get-parameter \
+      --name "/extraction/PG_USER" \
+      --with-decryption \
+      --query "Parameter.Value" \
+      --output text \
+      --region $REGION)
+
+    PG_PASSWORD=$(aws ssm get-parameter \
+      --name "/extraction/PG_PASSWORD" \
       --with-decryption \
       --query "Parameter.Value" \
       --output text \
@@ -231,11 +261,11 @@ resource "aws_instance" "extraction_instance" {
       -e TMDB_API_KEY="$TMDB_API_KEY" \
       -e DATABRICKS_HOST="$DATABRICKS_HOST" \
       -e DATABRICKS_TOKEN="$DATABRICKS_TOKEN" \
-      -e PG_HOST=${aws_db_instance.postgres_instance.address} \
-      -e PG_PORT=${aws_db_instance.postgres_instance.port} \
-      -e PG_DATABASE=${var.pg_database} \
-      -e PG_USER=${var.pg_user} \
-      -e PG_PASSWORD=${var.pg_password} \
+      -e PG_HOST="$PG_HOST" \
+      -e PG_PORT="$PG_PORT" \
+      -e PG_DATABASE="$PG_DATABASE" \
+      -e PG_USER="$PG_USER" \
+      -e PG_PASSWORD="$PG_PASSWORD" \
       -e GENRES="$GENRES" \
       -e NUMBER_OF_MOVIES="$NUMBER_OF_MOVIES" \
       $REPO:latest
@@ -309,6 +339,42 @@ resource "aws_ssm_parameter" "databricks_token" {
   name  = "/extraction/DATABRICKS_TOKEN"
   type  = "SecureString"
   value = "placeholder"
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "aws_ssm_parameter" "pg_host" {
+  name  = "/extraction/PG_HOST"
+  type  = "SecureString"
+  value = aws_db_instance.postgres_instance.address
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "aws_ssm_parameter" "pg_database" {
+  name  = "/extraction/PG_DATABASE"
+  type  = "SecureString"
+  value = var.pg_database
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "aws_ssm_parameter" "pg_user" {
+  name  = "/extraction/PG_USER"
+  type  = "SecureString"
+  value = var.pg_user
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "aws_ssm_parameter" "pg_password" {
+  name  = "/extraction/PG_PASSWORD"
+  type  = "SecureString"
+  value = var.pg_password
   lifecycle {
     ignore_changes = [value]
   }
