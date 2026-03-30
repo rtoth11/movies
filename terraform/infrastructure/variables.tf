@@ -71,7 +71,7 @@ variable pg_database {
 variable pg_user {
   description = "Username for the PostgreSQL database"
   type        = string
-  sensitive = true
+  sensitive   = true
 }
 
 variable pg_password {
@@ -80,28 +80,18 @@ variable pg_password {
   sensitive   = true
 }
 
-variable "backend_cpu" {
-  description = "CPU units for the backend ECS task"
-  type        = number
-}
-
-variable "backend_memory" {
-  description = "Memory (in MiB) for the backend ECS task"
-  type        = number
-}
-
-variable "frontend_cpu" {
-  description = "CPU units for the frontend ECS task"
-  type        = number
-}
-
-variable "frontend_memory" {
-  description = "Memory (in MiB) for the frontend ECS task"
-  type        = number
-}
-
 variable "deploy_backend_and_frontend" {
   description = "Flag to enable or disable the deployment of backend and frontend services"
   type        = bool
   default     = false
+}
+
+variable "ec2_ami" {
+  description = "The AMI of the image to use for EC2 instances"
+  type        = string
+}
+
+variable "ec2_instance_type" {
+  description = "The instance type of the EC2 instances to create"
+  type        = string
 }

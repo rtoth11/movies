@@ -23,12 +23,6 @@ output "movies_s3_bucket_name" {
   value       = aws_s3_bucket.movies_s3_bucket.bucket
 }
 
-output "pg_host" {
-  description = "The address of the PostgreSQL RDS instance."
-  value       = aws_db_instance.postgres_instance.address
-  sensitive   = true
-}
-
 output "pg_port" {
   description = "The port of the PostgreSQL RDS instance."
   value       = aws_db_instance.postgres_instance.port
@@ -39,27 +33,27 @@ output "alb_url" {
   value       = try(aws_lb.movies_alb[0].dns_name, null)
 }
 
-output "ecs_cluster_name" {
-  description = "The name of the ECS cluster that contains the backend and frontend tasks."
-  value       = try(aws_ecs_cluster.movies_cluster[0].name, null)
+output "backend_instance_id" {
+  description = "The ID of the backend EC2 instance"
+  value       = try(aws_instance.backend[0].id, null)
 }
 
-output "backend_ecs_task_definition_family" {
-  description = "The family of the backend ECS task definition."
-  value       = try(aws_ecs_task_definition.backend[0].family, null)
+output "frontend_instance_id" {
+  description = "The ID of the frontend EC2 instance"
+  value       = try(aws_instance.frontend[0].id, null)
 }
 
-output "frontend_ecs_task_definition_family" {
-  description = "The family of the frontend ECS task definition."
-  value       = try(aws_ecs_task_definition.frontend[0].family, null)
+output "backend_log_group" {
+  description = "The name of the backend CloudWatch log group"
+  value       = try(aws_cloudwatch_log_group.backend_log_group[0].name, null)
 }
 
-output "backend_ecs_service_name" {
-  description = "The name of the backend ECS service."
-  value       = try(aws_ecs_service.backend[0].name, null)
+output "frontend_log_group" {
+  description = "The name of the frontend CloudWatch log group"
+  value       = try(aws_cloudwatch_log_group.frontend_log_group[0].name, null)
 }
 
-output "frontend_ecs_service_name" {
-  description = "The name of the frontend ECS service."
-  value       = try(aws_ecs_service.frontend[0].name, null)
+output "aws_region" {
+  description = "The AWS region where the infrastructure is deployed"
+  value       = var.region
 }

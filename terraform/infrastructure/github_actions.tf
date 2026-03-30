@@ -124,31 +124,27 @@ resource "aws_iam_role_policy_attachment" "attach_ecr_public" {
   policy_arn = aws_iam_policy.ecr_public_policy.arn
 }
 
-data "aws_iam_policy_document" "update_ecs_task_definition_policy_document" {
+data "aws_iam_policy_document" "ssm_command_policy_document" {
   statement {
     effect = "Allow"
 
     actions = [
-      "ecs:DescribeClusters",
-      "ecs:DescribeTaskDefinition",
-      "ecs:DescribeServices",
-      "ecs:RegisterTaskDefinition",
-      "ecs:UpdateService",
-      "iam:PassRole"
+      "ssm:SendCommand",
+      "ssm:GetCommandInvocation"
     ]
 
     resources = ["*"]
   }
 }
 
-resource "aws_iam_policy" "update_ecs_task_definition_policy" {
-  name   = "update-ecs-task-definition-policy"
-  policy = data.aws_iam_policy_document.update_ecs_task_definition_policy_document.json
+resource "aws_iam_policy" "ssm_command_policy" {
+  name   = "ssm-command-policy"
+  policy = data.aws_iam_policy_document.ssm_command_policy_document.json
 }
 
-resource "aws_iam_role_policy_attachment" "attach_update_ecs_task_definition_to_github_role" {
+resource "aws_iam_role_policy_attachment" "attach_ssm_command_to_github_role" {
   role       = aws_iam_role.role_for_infrastructure_update.name
-  policy_arn = aws_iam_policy.update_ecs_task_definition_policy.arn
+  policy_arn = aws_iam_policy.ssm_command_policy.arn
 }
 
 data "aws_iam_policy_document" "ssm_policy_document" {
@@ -156,7 +152,7 @@ data "aws_iam_policy_document" "ssm_policy_document" {
     effect = "Allow"
 
     actions = [
-      "ssm:PutParameter"
+      "ssm:PutParameter",
     ]
 
     resources = [

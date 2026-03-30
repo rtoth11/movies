@@ -161,8 +161,8 @@ resource "aws_security_group" "extraction_sg" {
 }
 
 resource "aws_instance" "extraction_instance" {
-  ami           = "ami-0f3caa1cf4417e51b"
-  instance_type = "t2.micro"
+  ami           = var.ec2_ami
+  instance_type = var.ec2_instance_type
 
   iam_instance_profile = aws_iam_instance_profile.extraction_instance_profile.name
   vpc_security_group_ids = [aws_security_group.extraction_sg.id]
@@ -170,130 +170,130 @@ resource "aws_instance" "extraction_instance" {
   user_data_replace_on_change = true
 
   user_data = <<-EOF
-      #!/bin/bash
-      yum update -y
-      yum install -y docker
-      systemctl enable docker
-      systemctl start docker
+    #!/bin/bash
+    yum update -y
+    yum install -y docker
+    systemctl enable docker
+    systemctl start docker
 
-      cat << 'SCRIPT' > /usr/local/bin/run-extraction.sh
-      #!/bin/bash
+    cat << 'SCRIPT' > /usr/local/bin/run-extraction.sh
+    #!/bin/bash
 
-      REGION=${var.region}
-      ACCOUNT_ID=${data.aws_caller_identity.current.account_id}
-      REPO=${aws_ecr_repository.extraction_ecr_repository.repository_url}
+    REGION=${var.region}
+    ACCOUNT_ID=${data.aws_caller_identity.current.account_id}
+    REPO=${aws_ecr_repository.extraction_ecr_repository.repository_url}
 
-      PG_PORT=${aws_db_instance.postgres_instance.port}
+    PG_PORT=${aws_db_instance.postgres_instance.port}
 
-      TMDB_API_KEY=$(aws ssm get-parameter \
-        --name "/extraction/TMDB_API_KEY" \
-        --with-decryption \
-        --query "Parameter.Value" \
-        --output text \
-        --region $REGION)
+    TMDB_API_KEY=$(aws ssm get-parameter \
+      --name "/extraction/TMDB_API_KEY" \
+      --with-decryption \
+      --query "Parameter.Value" \
+      --output text \
+      --region $REGION)
 
-      DATABRICKS_HOST=$(aws ssm get-parameter \
-        --name "/extraction/DATABRICKS_HOST" \
-        --with-decryption \
-        --query "Parameter.Value" \
-        --output text \
-        --region $REGION)
+    DATABRICKS_HOST=$(aws ssm get-parameter \
+      --name "/extraction/DATABRICKS_HOST" \
+      --with-decryption \
+      --query "Parameter.Value" \
+      --output text \
+      --region $REGION)
 
-      DATABRICKS_TOKEN=$(aws ssm get-parameter \
-        --name "/extraction/DATABRICKS_TOKEN" \
-        --with-decryption \
-        --query "Parameter.Value" \
-        --output text \
-        --region $REGION)
+    DATABRICKS_TOKEN=$(aws ssm get-parameter \
+      --name "/extraction/DATABRICKS_TOKEN" \
+      --with-decryption \
+      --query "Parameter.Value" \
+      --output text \
+      --region $REGION)
 
-      PG_HOST=$(aws ssm get-parameter \
-        --name "/extraction/PG_HOST" \
-        --with-decryption \
-        --query "Parameter.Value" \
-        --output text \
-        --region $REGION)
+    PG_HOST=$(aws ssm get-parameter \
+      --name "/extraction/PG_HOST" \
+      --with-decryption \
+      --query "Parameter.Value" \
+      --output text \
+      --region $REGION)
 
-      PG_DATABASE=$(aws ssm get-parameter \
-        --name "/extraction/PG_DATABASE" \
-        --with-decryption \
-        --query "Parameter.Value" \
-        --output text \
-        --region $REGION)
+    PG_DATABASE=$(aws ssm get-parameter \
+      --name "/extraction/PG_DATABASE" \
+      --with-decryption \
+      --query "Parameter.Value" \
+      --output text \
+      --region $REGION)
 
-      PG_USER=$(aws ssm get-parameter \
-        --name "/extraction/PG_USER" \
-        --with-decryption \
-        --query "Parameter.Value" \
-        --output text \
-        --region $REGION)
+    PG_USER=$(aws ssm get-parameter \
+      --name "/extraction/PG_USER" \
+      --with-decryption \
+      --query "Parameter.Value" \
+      --output text \
+      --region $REGION)
 
-      PG_PASSWORD=$(aws ssm get-parameter \
-        --name "/extraction/PG_PASSWORD" \
-        --with-decryption \
-        --query "Parameter.Value" \
-        --output text \
-        --region $REGION)
+    PG_PASSWORD=$(aws ssm get-parameter \
+      --name "/extraction/PG_PASSWORD" \
+      --with-decryption \
+      --query "Parameter.Value" \
+      --output text \
+      --region $REGION)
 
-      GENRES=$(aws ssm get-parameter \
-        --name "/extraction/GENRES" \
-        --query "Parameter.Value" \
-        --output text \
-        --region $REGION)
+    GENRES=$(aws ssm get-parameter \
+      --name "/extraction/GENRES" \
+      --query "Parameter.Value" \
+      --output text \
+      --region $REGION)
 
-      NUMBER_OF_MOVIES=$(aws ssm get-parameter \
-        --name "/extraction/NUMBER_OF_MOVIES" \
-        --query "Parameter.Value" \
-        --output text \
-        --region $REGION)
+    NUMBER_OF_MOVIES=$(aws ssm get-parameter \
+      --name "/extraction/NUMBER_OF_MOVIES" \
+      --query "Parameter.Value" \
+      --output text \
+      --region $REGION)
 
-      aws ecr get-login-password --region $REGION \
-        | docker login \
-        --username AWS \
-        --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+    aws ecr get-login-password --region $REGION \
+      | docker login \
+      --username AWS \
+      --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
 
-      docker pull $REPO:latest
+    docker pull $REPO:latest
 
-      docker run --rm \
-        --log-driver=awslogs \
-        --log-opt awslogs-region=$REGION \
-        --log-opt awslogs-group=/extraction/movie-batch \
-        --log-opt awslogs-stream=$(hostname)-$(date +%s) \
-        -e TMDB_API_KEY="$TMDB_API_KEY" \
-        -e DATABRICKS_HOST="$DATABRICKS_HOST" \
-        -e DATABRICKS_TOKEN="$DATABRICKS_TOKEN" \
-        -e PG_HOST="$PG_HOST" \
-        -e PG_PORT="$PG_PORT" \
-        -e PG_DATABASE="$PG_DATABASE" \
-        -e PG_USER="$PG_USER" \
-        -e PG_PASSWORD="$PG_PASSWORD" \
-        -e GENRES="$GENRES" \
-        -e NUMBER_OF_MOVIES="$NUMBER_OF_MOVIES" \
-        $REPO:latest
+    docker run --rm \
+      --log-driver=awslogs \
+      --log-opt awslogs-region=$REGION \
+      --log-opt awslogs-group=${aws_cloudwatch_log_group.extraction_log_group.name} \
+      --log-opt awslogs-stream=$(hostname)-$(date +%s) \
+      -e TMDB_API_KEY="$TMDB_API_KEY" \
+      -e DATABRICKS_HOST="$DATABRICKS_HOST" \
+      -e DATABRICKS_TOKEN="$DATABRICKS_TOKEN" \
+      -e PG_HOST="$PG_HOST" \
+      -e PG_PORT="$PG_PORT" \
+      -e PG_DATABASE="$PG_DATABASE" \
+      -e PG_USER="$PG_USER" \
+      -e PG_PASSWORD="$PG_PASSWORD" \
+      -e GENRES="$GENRES" \
+      -e NUMBER_OF_MOVIES="$NUMBER_OF_MOVIES" \
+      $REPO:latest
 
-      shutdown -h now
-      SCRIPT
+    shutdown -h now
+    SCRIPT
 
-      chmod +x /usr/local/bin/run-extraction.sh
+    chmod +x /usr/local/bin/run-extraction.sh
 
-      # Create systemd service
-      cat << 'SERVICE' > /etc/systemd/system/extraction.service
-      [Unit]
-      Description=Run Movie Extraction Container
-      After=docker.service
-      Requires=docker.service
+    # Create systemd service
+    cat << 'SERVICE' > /etc/systemd/system/extraction.service
+    [Unit]
+    Description=Run movie extraction container
+    After=docker.service
+    Requires=docker.service
 
-      [Service]
-      Type=oneshot
-      ExecStart=/usr/local/bin/run-extraction.sh
-      RemainAfterExit=false
+    [Service]
+    Type=oneshot
+    ExecStart=/usr/local/bin/run-extraction.sh
+    RemainAfterExit=false
 
-      [Install]
-      WantedBy=multi-user.target
-      SERVICE
+    [Install]
+    WantedBy=multi-user.target
+    SERVICE
 
-      systemctl enable extraction.service
-      shutdown -h now
-      EOF
+    systemctl enable extraction.service
+    shutdown -h now
+  EOF
 
   tags = {
     Name = "movie-extraction-instance"
@@ -347,7 +347,7 @@ resource "aws_ssm_parameter" "databricks_token" {
 resource "aws_ssm_parameter" "pg_host" {
   name  = "/extraction/PG_HOST"
   type  = "SecureString"
-  value = "placeholder"
+  value = aws_db_instance.postgres_instance.address
   lifecycle {
     ignore_changes = [value]
   }
@@ -356,7 +356,7 @@ resource "aws_ssm_parameter" "pg_host" {
 resource "aws_ssm_parameter" "pg_database" {
   name  = "/extraction/PG_DATABASE"
   type  = "SecureString"
-  value = "placeholder"
+  value = var.pg_database
   lifecycle {
     ignore_changes = [value]
   }
@@ -365,7 +365,7 @@ resource "aws_ssm_parameter" "pg_database" {
 resource "aws_ssm_parameter" "pg_user" {
   name  = "/extraction/PG_USER"
   type  = "SecureString"
-  value = "placeholder"
+  value = var.pg_user
   lifecycle {
     ignore_changes = [value]
   }
@@ -374,7 +374,7 @@ resource "aws_ssm_parameter" "pg_user" {
 resource "aws_ssm_parameter" "pg_password" {
   name  = "/extraction/PG_PASSWORD"
   type  = "SecureString"
-  value = "placeholder"
+  value = var.pg_password
   lifecycle {
     ignore_changes = [value]
   }

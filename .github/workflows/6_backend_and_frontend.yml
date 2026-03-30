@@ -31,12 +31,12 @@ jobs:
           echo "backend_ecr_repository_url=$(terraform output -raw backend_ecr_repository_url)" >> $GITHUB_OUTPUT
           echo "frontend_ecr_repository_url=$(terraform output -raw frontend_ecr_repository_url)" >> $GITHUB_OUTPUT
           echo "role_for_infrastructure_update=$(terraform output -raw role_for_infrastructure_update)" >> $GITHUB_OUTPUT
-          echo "alb_url=$(terraform output -raw alb_url)" >> $GITHUB_OUTPUT
-          echo "ecs_cluster_name=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
-          echo "backend_ecs_task_definition_family=$(terraform output -raw backend_ecs_task_definition_family)" >> $GITHUB_OUTPUT
-          echo "frontend_ecs_task_definition_family=$(terraform output -raw frontend_ecs_task_definition_family)" >> $GITHUB_OUTPUT
-          echo "backend_ecs_service_name=$(terraform output -raw backend_ecs_service_name)" >> $GITHUB_OUTPUT
-          echo "frontend_ecs_service_name=$(terraform output -raw frontend_ecs_service_name)" >> $GITHUB_OUTPUT
+          echo "backend_instance_id=$(terraform output -raw backend_instance_id)" >> $GITHUB_OUTPUT
+          echo "frontend_instance_id=$(terraform output -raw frontend_instance_id)" >> $GITHUB_OUTPUT
+          echo "pg_port=$(terraform output -raw pg_port)" >> $GITHUB_OUTPUT
+          echo "backend_log_group=$(terraform output -raw backend_log_group)" >> $GITHUB_OUTPUT
+          echo "frontend_log_group=$(terraform output -raw frontend_log_group)" >> $GITHUB_OUTPUT
+          echo "aws_region=$(terraform output -raw aws_region)" >> $GITHUB_OUTPUT
 
       - name: Read backend version from file
         run: echo "BACKEND_VERSION=$(cat app/backend/VERSION)" >> $GITHUB_ENV
@@ -48,7 +48,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: ${{ steps.tf_outputs.outputs.role_for_infrastructure_update }}
-          aws-region: us-east-1
+          aws-region: ${{ steps.tf_outputs.outputs.aws_region }}
 
       - name: Login to Amazon ECR Public
         uses: aws-actions/amazon-ecr-login@v2
@@ -92,82 +92,74 @@ jobs:
           provenance: false
           platforms: linux/amd64
 
-      - name: Wait for backend service stability
+      - name: Deploy backend
+        env:
+          REGION: ${{ steps.tf_outputs.outputs.aws_region }}
         run: |
-          aws ecs wait services-stable \
-            --cluster ${{ steps.tf_outputs.outputs.ecs_cluster_name }} \
-            --services ${{ steps.tf_outputs.outputs.backend_ecs_service_name }}
+          COMMAND_ID=$(aws ssm send-command \
+            --region $REGION \
+            --instance-ids ${{ steps.tf_outputs.outputs.backend_instance_id }} \
+            --document-name "AWS-RunShellScript" \
+            --query "Command.CommandId" \
+            --output text \
+            --parameters 'commands=[
+              "PG_HOST=$(aws ssm get-parameter --name /extraction/PG_HOST --with-decryption --query Parameter.Value --output text --region ${{ steps.tf_outputs.outputs.aws_region }}) && \
+              docker stop backend || true && \
+              docker rm backend || true && \
+              docker pull ${{ steps.tf_outputs.outputs.backend_ecr_repository_url }}:latest && \
+              docker run -d --name backend --restart always -p 5000:5000 \
+                -e PG_HOST=$PG_HOST \
+                -e PG_PORT=${{ steps.tf_outputs.outputs.pg_port }} \
+                -e PG_DATABASE=${{ secrets.PG_DATABASE }} \
+                -e PG_USER=${{ secrets.PG_USER }} \
+                -e PG_PASSWORD=${{ secrets.PG_PASSWORD }} \
+                --log-driver=awslogs \
+                --log-opt awslogs-region=$REGION \
+                --log-opt awslogs-group=${{ steps.tf_outputs.outputs.backend_log_group }} \
+                ${{ steps.tf_outputs.outputs.backend_ecr_repository_url }}:latest"
+            ]')
 
-      - name: Update image of backend ECS task
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id ${{ steps.tf_outputs.outputs.backend_instance_id }} \
+            --region $REGION || true
+          
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id ${{ steps.tf_outputs.outputs.backend_instance_id }} \
+            --region $REGION \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+            --output json
+
+      - name: Deploy frontend
+        env:
+          REGION: ${{ steps.tf_outputs.outputs.aws_region }}
         run: |
-          aws ecs describe-task-definition \
-            --task-definition ${{ steps.tf_outputs.outputs.backend_ecs_task_definition_family }} \
-            --query taskDefinition \
-          | jq '
-            del(
-            .taskDefinitionArn,
-            .revision,
-            .status,
-            .requiresAttributes,
-            .compatibilities,
-            .registeredAt,
-            .registeredBy
-            )
-            | .containerDefinitions[0].image = "'"${{ steps.tf_outputs.outputs.backend_ecr_repository_url }}:latest"'"
-          ' > updated-task-def.json
+          COMMAND_ID=$(aws ssm send-command \
+            --region $REGION \
+            --instance-ids ${{ steps.tf_outputs.outputs.frontend_instance_id }} \
+            --document-name "AWS-RunShellScript" \
+            --query "Command.CommandId" \
+            --output text \
+            --parameters 'commands=[
+              "docker stop frontend || true",
+              "docker rm frontend || true",
+              "docker pull ${{ steps.tf_outputs.outputs.frontend_ecr_repository_url }}:latest",
+              "docker run -d --name frontend --restart always -p 80:80 \
+                --log-driver=awslogs \
+                --log-opt awslogs-region=$REGION \
+                --log-opt awslogs-group=${{ steps.tf_outputs.outputs.frontend_log_group }}\
+                ${{ steps.tf_outputs.outputs.frontend_ecr_repository_url }}:latest"
+            ]')
 
-          TASK_DEF_ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://updated-task-def.json \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id ${{ steps.tf_outputs.outputs.frontend_instance_id }}
+            --region $REGION || true
 
-          aws ecs update-service \
-            --cluster ${{ steps.tf_outputs.outputs.ecs_cluster_name }} \
-            --service ${{ steps.tf_outputs.outputs.backend_ecs_service_name }} \
-            --task-definition $TASK_DEF_ARN
-
-      - name: Wait for backend service stability
-        run: |
-          aws ecs wait services-stable \
-            --cluster ${{ steps.tf_outputs.outputs.ecs_cluster_name }} \
-            --services ${{ steps.tf_outputs.outputs.backend_ecs_service_name }}
-
-      - name: Wait for frontend service stability
-        run: |
-          aws ecs wait services-stable \
-            --cluster ${{ steps.tf_outputs.outputs.ecs_cluster_name }} \
-            --services ${{ steps.tf_outputs.outputs.frontend_ecs_service_name }}
-
-      - name: Update image of frontend ECS task
-        run: |
-          aws ecs describe-task-definition \
-            --task-definition ${{ steps.tf_outputs.outputs.frontend_ecs_task_definition_family }} \
-            --query taskDefinition \
-          | jq '
-            del(
-              .taskDefinitionArn,
-              .revision,
-              .status,
-              .requiresAttributes,
-              .compatibilities,
-              .registeredAt,
-              .registeredBy
-            )
-            | .containerDefinitions[0].image = "'"${{ steps.tf_outputs.outputs.frontend_ecr_repository_url }}:latest"'"
-          ' > updated-task-def.json
-        
-          TASK_DEF_ARN=$(aws ecs register-task-definition \
-            --cli-input-json file://updated-task-def.json \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
-        
-          aws ecs update-service \
-            --cluster ${{ steps.tf_outputs.outputs.ecs_cluster_name }} \
-            --service ${{ steps.tf_outputs.outputs.frontend_ecs_service_name }} \
-            --task-definition $TASK_DEF_ARN
-
-      - name: Wait for frontend service stability
-        run: |
-          aws ecs wait services-stable \
-            --cluster ${{ steps.tf_outputs.outputs.ecs_cluster_name }} \
-            --services ${{ steps.tf_outputs.outputs.frontend_ecs_service_name }}
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id ${{ steps.tf_outputs.outputs.frontend_instance_id }} \
+            --region $REGION \
+            --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+            --output json
