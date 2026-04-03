@@ -70,6 +70,9 @@ data "aws_iam_policy_document" "first_terraform_policy_document" {
       "s3:GetBucketPolicy",
       "sts:GetCallerIdentity",
       "ec2:CreateVpc",
+      "ec2:DescribeVpcEndpoints",
+      "ec2:CreateVpcEndpoint",
+      "ec2:DeleteVpcEndpoints",
       "ec2:ModifyVpcAttribute",
       "ec2:DescribeVpcs",
       "ec2:DeleteVpc",
@@ -109,7 +112,6 @@ data "aws_iam_policy_document" "first_terraform_policy_document" {
       "ec2:DescribeImages",
       "ec2:DescribeLaunchTemplates",
       "ec2:DescribeLaunchTemplateVersions",
-      "ec2:DescribeAutoScalingGroups",
       "ec2:DescribeTags",
       "ec2:DescribeInstances",
       "ec2:DescribeInstanceTypes",
@@ -122,6 +124,7 @@ data "aws_iam_policy_document" "first_terraform_policy_document" {
       "ec2:StopInstances",
       "ec2:TerminateInstances",
       "ec2:ModifyInstanceAttribute",
+      "ec2:DescribePrefixLists",
       "rds:CreateDBInstance",
       "rds:ModifyDBInstance",
       "rds:DeleteDBInstance",
@@ -161,7 +164,6 @@ data "aws_iam_policy_document" "first_terraform_policy_document" {
       "iam:GetInstanceProfile",
       "ssm:GetParameters",
       "autoscaling:DescribeAutoScalingGroups",
-      "autoscaling:DescribeAutoScalingActivities",
       "autoscaling:DescribeLaunchConfigurations",
       "autoscaling:DescribeScalingActivities",
       "logs:CreateLogGroup",
@@ -424,6 +426,33 @@ data "aws_iam_policy_document" "second_terraform_policy_document" {
 
     resources = [
       "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/*"
+    ]
+  }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "lambda:AddPermission",
+      "lambda:CreateFunction",
+      "lambda:DeleteFunction",
+      "lambda:GetFunction",
+      "lambda:GetPolicy",
+      "lambda:ListVersionsByFunction",
+      "lambda:RemovePermission",
+      "lambda:UpdateFunctionCode",
+      "lambda:GetFunctionEventInvokeConfig",
+      "lambda:PutFunctionEventInvokeConfig",
+      "lambda:ListFunctionEventInvokeConfigs",
+      "lambda:DeleteFunctionEventInvokeConfig",
+      "lambda:UpdateFunctionEventInvokeConfig",
+      "lambda:UpdateFunctionConfiguration",
+      "lambda:TagResource",
+      "lambda:GetFunctionCodeSigningConfig",
+    ]
+
+    resources = [
+      "arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:*"
     ]
   }
 }

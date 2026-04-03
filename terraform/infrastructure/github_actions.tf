@@ -152,6 +152,8 @@ data "aws_iam_policy_document" "ssm_policy_document" {
     effect = "Allow"
 
     actions = [
+      "ssm:GetParameter",
+      "ssm:GetParameters",
       "ssm:PutParameter",
     ]
 

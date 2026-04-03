@@ -17,7 +17,7 @@ resource "aws_iam_role" "extraction_ec2_role" {
 
 data "aws_iam_policy_document" "cloudwatch_write_policy_document" {
   statement {
-    effect = "Allow"
+    effect    = "Allow"
     resources = ["arn:aws:logs:${var.region}:${data.aws_caller_identity.current.account_id}:log-group:/extraction/*"]
     actions = [
       "logs:CreateLogGroup",
@@ -51,13 +51,10 @@ data "aws_caller_identity" "current" {}
 
 data "aws_iam_policy_document" "ssm_read_policy_document" {
   statement {
-    effect = "Allow"
-    actions = [
-      "ssm:GetParameter",
-      "ssm:GetParameters"
-    ]
+    effect  = "Allow"
+    actions = ["ssm:GetParameter", "ssm:GetParameters"]
     resources = [
-      "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/extraction/*"
+      "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/movies/*"
     ]
   }
 }
@@ -74,8 +71,8 @@ resource "aws_iam_role_policy_attachment" "attach_ssm_read_policy" {
 
 data "aws_iam_policy_document" "kms_decrypt_policy_document" {
   statement {
-    effect = "Allow"
-    actions = ["kms:Decrypt"]
+    effect    = "Allow"
+    actions   = ["kms:Decrypt"]
     resources = ["*"]
   }
 }
@@ -109,9 +106,11 @@ resource "aws_iam_role" "event_bridge_role" {
 
 data "aws_iam_policy_document" "ec2_start_policy_document" {
   statement {
-    effect = "Allow"
+    effect  = "Allow"
     actions = ["ec2:StartInstances"]
-    resources = ["arn:aws:ec2:${var.region}:${data.aws_caller_identity.current.account_id}:instance/${aws_instance.extraction_instance.id}"]
+    resources = [
+      "arn:aws:ec2:${var.region}:${data.aws_caller_identity.current.account_id}:instance/${aws_instance.extraction_instance.id}"
+    ]
   }
 }
 
@@ -127,8 +126,8 @@ resource "aws_iam_role_policy_attachment" "attach_ec2_start_policy" {
 
 data "aws_iam_policy_document" "start_automation_policy_document" {
   statement {
-    effect = "Allow"
-    actions = ["ssm:StartAutomationExecution"]
+    effect    = "Allow"
+    actions   = ["ssm:StartAutomationExecution"]
     resources = ["*"]
   }
 }
@@ -150,7 +149,8 @@ resource "aws_iam_instance_profile" "extraction_instance_profile" {
 
 resource "aws_security_group" "extraction_sg" {
   name        = "extraction-sg"
-  description = "Allow outbound internet access"
+  description = "Allow outbound internet access for extraction EC2"
+  vpc_id      = aws_vpc.movies_vpc.id
 
   egress {
     from_port   = 0
@@ -164,9 +164,10 @@ resource "aws_instance" "extraction_instance" {
   ami           = var.ec2_ami
   instance_type = var.ec2_instance_type
 
-  iam_instance_profile = aws_iam_instance_profile.extraction_instance_profile.name
+  subnet_id              = aws_subnet.public[0].id
   vpc_security_group_ids = [aws_security_group.extraction_sg.id]
 
+  iam_instance_profile        = aws_iam_instance_profile.extraction_instance_profile.name
   user_data_replace_on_change = true
 
   user_data = <<-EOF
@@ -183,65 +184,70 @@ resource "aws_instance" "extraction_instance" {
     ACCOUNT_ID=${data.aws_caller_identity.current.account_id}
     REPO=${aws_ecr_repository.extraction_ecr_repository.repository_url}
 
-    PG_PORT=${aws_db_instance.postgres_instance.port}
-
     TMDB_API_KEY=$(aws ssm get-parameter \
-      --name "/extraction/TMDB_API_KEY" \
+      --name "/movies/TMDB_API_KEY" \
       --with-decryption \
       --query "Parameter.Value" \
       --output text \
       --region $REGION)
 
     DATABRICKS_HOST=$(aws ssm get-parameter \
-      --name "/extraction/DATABRICKS_HOST" \
+      --name "/movies/DATABRICKS_HOST" \
       --with-decryption \
       --query "Parameter.Value" \
       --output text \
       --region $REGION)
 
     DATABRICKS_TOKEN=$(aws ssm get-parameter \
-      --name "/extraction/DATABRICKS_TOKEN" \
+      --name "/movies/DATABRICKS_TOKEN" \
       --with-decryption \
       --query "Parameter.Value" \
       --output text \
       --region $REGION)
 
     PG_HOST=$(aws ssm get-parameter \
-      --name "/extraction/PG_HOST" \
+      --name "/movies/PG_HOST" \
+      --with-decryption \
+      --query "Parameter.Value" \
+      --output text \
+      --region $REGION)
+
+    PG_PORT=$(aws ssm get-parameter \
+      --name "/movies/PG_PORT" \
       --with-decryption \
       --query "Parameter.Value" \
       --output text \
       --region $REGION)
 
     PG_DATABASE=$(aws ssm get-parameter \
-      --name "/extraction/PG_DATABASE" \
+      --name "/movies/PG_DATABASE" \
       --with-decryption \
       --query "Parameter.Value" \
       --output text \
       --region $REGION)
 
     PG_USER=$(aws ssm get-parameter \
-      --name "/extraction/PG_USER" \
+      --name "/movies/PG_USER" \
       --with-decryption \
       --query "Parameter.Value" \
       --output text \
       --region $REGION)
 
     PG_PASSWORD=$(aws ssm get-parameter \
-      --name "/extraction/PG_PASSWORD" \
+      --name "/movies/PG_PASSWORD" \
       --with-decryption \
       --query "Parameter.Value" \
       --output text \
       --region $REGION)
 
     GENRES=$(aws ssm get-parameter \
-      --name "/extraction/GENRES" \
+      --name "/movies/GENRES" \
       --query "Parameter.Value" \
       --output text \
       --region $REGION)
 
     NUMBER_OF_MOVIES=$(aws ssm get-parameter \
-      --name "/extraction/NUMBER_OF_MOVIES" \
+      --name "/movies/NUMBER_OF_MOVIES" \
       --query "Parameter.Value" \
       --output text \
       --region $REGION)
@@ -275,7 +281,6 @@ resource "aws_instance" "extraction_instance" {
 
     chmod +x /usr/local/bin/run-extraction.sh
 
-    # Create systemd service
     cat << 'SERVICE' > /etc/systemd/system/extraction.service
     [Unit]
     Description=Run movie extraction container
@@ -301,8 +306,8 @@ resource "aws_instance" "extraction_instance" {
 }
 
 resource "aws_cloudwatch_event_rule" "run_data_extraction_event_rule" {
-  name        = var.extraction_event_rule_name
-  description = "Run data extraction code on a defined schedule"
+  name                = var.extraction_event_rule_name
+  description         = "Run data extraction code on a defined schedule"
   schedule_expression = var.extraction_event_schedule_expression
 }
 
@@ -310,7 +315,7 @@ resource "aws_cloudwatch_event_target" "start_ec2_target" {
   rule      = aws_cloudwatch_event_rule.run_data_extraction_event_rule.name
   target_id = "start-extraction-ec2-instance"
   arn       = "arn:aws:ssm:us-east-1::automation-definition/AWS-StartEC2Instance"
-  role_arn = aws_iam_role.event_bridge_role.arn
+  role_arn  = aws_iam_role.event_bridge_role.arn
 
   input = jsonencode({
     InstanceId = [aws_instance.extraction_instance.id]
@@ -318,82 +323,71 @@ resource "aws_cloudwatch_event_target" "start_ec2_target" {
 }
 
 resource "aws_ssm_parameter" "tmdb_api_key" {
-  name  = "/extraction/TMDB_API_KEY"
+  name  = "/movies/TMDB_API_KEY"
   type  = "SecureString"
   value = "placeholder"
-  lifecycle {
-    ignore_changes = [value]
-  }
+  lifecycle { ignore_changes = [value] }
 }
 
 resource "aws_ssm_parameter" "databricks_host" {
-  name  = "/extraction/DATABRICKS_HOST"
+  name  = "/movies/DATABRICKS_HOST"
   type  = "SecureString"
   value = "placeholder"
-  lifecycle {
-    ignore_changes = [value]
-  }
+  lifecycle { ignore_changes = [value] }
 }
 
 resource "aws_ssm_parameter" "databricks_token" {
-  name  = "/extraction/DATABRICKS_TOKEN"
+  name  = "/movies/DATABRICKS_TOKEN"
   type  = "SecureString"
   value = "placeholder"
-  lifecycle {
-    ignore_changes = [value]
-  }
+  lifecycle { ignore_changes = [value] }
 }
 
 resource "aws_ssm_parameter" "pg_host" {
-  name  = "/extraction/PG_HOST"
+  name  = "/movies/PG_HOST"
   type  = "SecureString"
   value = aws_db_instance.postgres_instance.address
-  lifecycle {
-    ignore_changes = [value]
-  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "pg_port" {
+  name  = "/movies/PG_PORT"
+  type  = "SecureString"
+  value = tostring(aws_db_instance.postgres_instance.port)
+  lifecycle { ignore_changes = [value] }
 }
 
 resource "aws_ssm_parameter" "pg_database" {
-  name  = "/extraction/PG_DATABASE"
+  name  = "/movies/PG_DATABASE"
   type  = "SecureString"
   value = var.pg_database
-  lifecycle {
-    ignore_changes = [value]
-  }
+  lifecycle { ignore_changes = [value] }
 }
 
 resource "aws_ssm_parameter" "pg_user" {
-  name  = "/extraction/PG_USER"
+  name  = "/movies/PG_USER"
   type  = "SecureString"
   value = var.pg_user
-  lifecycle {
-    ignore_changes = [value]
-  }
+  lifecycle { ignore_changes = [value] }
 }
 
 resource "aws_ssm_parameter" "pg_password" {
-  name  = "/extraction/PG_PASSWORD"
+  name  = "/movies/PG_PASSWORD"
   type  = "SecureString"
   value = var.pg_password
-  lifecycle {
-    ignore_changes = [value]
-  }
+  lifecycle { ignore_changes = [value] }
 }
 
 resource "aws_ssm_parameter" "genres" {
-  name  = "/extraction/GENRES"
+  name  = "/movies/GENRES"
   type  = "String"
   value = "placeholder"
-  lifecycle {
-    ignore_changes = [value]
-  }
+  lifecycle { ignore_changes = [value] }
 }
 
 resource "aws_ssm_parameter" "number_of_movies" {
-  name  = "/extraction/NUMBER_OF_MOVIES"
+  name  = "/movies/NUMBER_OF_MOVIES"
   type  = "String"
   value = "placeholder"
-  lifecycle {
-    ignore_changes = [value]
-  }
+  lifecycle { ignore_changes = [value] }
 }

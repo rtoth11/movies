@@ -73,9 +73,7 @@ resource "aws_security_group" "alb_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name = "alb-security-group"
-  }
+  tags = { Name = "alb-security-group" }
 }
 
 resource "aws_security_group" "ec2_sg" {
@@ -104,9 +102,7 @@ resource "aws_security_group" "ec2_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name = "ec2-security-group"
-  }
+  tags = { Name = "ec2-security-group" }
 }
 
 resource "aws_subnet" "private" {
@@ -116,24 +112,18 @@ resource "aws_subnet" "private" {
   availability_zone       = var.azs[count.index]
   map_public_ip_on_launch = false
 
-  tags = {
-    Name = "private-subnet-${count.index + 1}"
-  }
+  tags = { Name = "private-subnet-${count.index + 1}" }
 }
 
 resource "aws_route_table" "private_route_table" {
-  count  = var.deploy_backend_and_frontend ? 1 : 0
   vpc_id = aws_vpc.movies_vpc.id
-
-  tags = {
-    Name = "private-route-table"
-  }
+  tags   = { Name = "private-route-table" }
 }
 
 resource "aws_route_table_association" "private_association" {
   count          = var.deploy_backend_and_frontend ? length(aws_subnet.private) : 0
   subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private_route_table[0].id
+  route_table_id = aws_route_table.private_route_table.id
 }
 
 module "fck-nat" {
@@ -148,7 +138,7 @@ module "fck-nat" {
   update_route_tables = true
 
   route_tables_ids = {
-    private = aws_route_table.private_route_table[0].id
+    private = aws_route_table.private_route_table.id
   }
 }
 
@@ -180,9 +170,7 @@ resource "aws_instance" "backend" {
     systemctl start docker
   EOF
 
-  tags = {
-    Name = "movies-backend"
-  }
+  tags = { Name = "movies-backend" }
 }
 
 resource "aws_instance" "frontend" {
@@ -201,9 +189,7 @@ resource "aws_instance" "frontend" {
     systemctl start docker
   EOF
 
-  tags = {
-    Name = "movies-frontend"
-  }
+  tags = { Name = "movies-frontend" }
 }
 
 resource "aws_lb" "movies_alb" {

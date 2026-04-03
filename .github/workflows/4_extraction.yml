@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
@@ -31,7 +31,7 @@ jobs:
           echo "role_for_infrastructure_update=$(terraform output -raw role_for_infrastructure_update)" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ steps.tf_outputs.outputs.role_for_infrastructure_update }}
           aws-region: us-east-1
@@ -45,31 +45,31 @@ jobs:
           NUMBER_OF_MOVIES: ${{ vars.NUMBER_OF_MOVIES }}
         run: |
           aws ssm put-parameter \
-            --name "/extraction/TMDB_API_KEY" \
+            --name "/movies/TMDB_API_KEY" \
             --value "$TMDB_API_KEY" \
             --type "SecureString" \
             --overwrite
 
           aws ssm put-parameter \
-            --name "/extraction/DATABRICKS_HOST" \
+            --name "/movies/DATABRICKS_HOST" \
             --value "$DATABRICKS_HOST" \
             --type "SecureString" \
             --overwrite
 
           aws ssm put-parameter \
-            --name "/extraction/DATABRICKS_TOKEN" \
+            --name "/movies/DATABRICKS_TOKEN" \
             --value "$DATABRICKS_TOKEN" \
             --type "SecureString" \
             --overwrite
 
           aws ssm put-parameter \
-            --name "/extraction/GENRES" \
+            --name "/movies/GENRES" \
             --value "$GENRES" \
             --type "String" \
             --overwrite
 
           aws ssm put-parameter \
-            --name "/extraction/NUMBER_OF_MOVIES" \
+            --name "/movies/NUMBER_OF_MOVIES" \
             --value "$NUMBER_OF_MOVIES" \
             --type "String" \
             --overwrite
@@ -88,10 +88,10 @@ jobs:
           echo "TAGS=$TAGS" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build and push image to ECR
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./extraction
           file: ./extraction/Dockerfile
