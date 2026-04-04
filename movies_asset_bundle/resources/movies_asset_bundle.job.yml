@@ -46,6 +46,10 @@ resources:
               - ${var.secret_scope}
               - --s3-bucket-name
               - ${var.s3_bucket_name}
+              - --lambda-name
+              - ${var.lambda_name}
+              - --aws-region
+              - ${var.aws_region}
 
       environments:
         - environment_key: default

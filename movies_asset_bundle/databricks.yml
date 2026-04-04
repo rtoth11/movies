@@ -34,6 +34,10 @@ variables:
     description: "The secret scope to use for retrieving sensitive information"
   s3_bucket_name:
     description: "The S3 bucket to upload CSV files to when moving data to postgres"
+  lambda_name:
+    description: "The name of the lambda function to trigger for loading data into postgres"
+  aws_region:
+    description: "The AWS region where the AWS resources are located"
   catalog_name:
     description: "The catalog to use when building the movie dbt models"
     default: "movies"

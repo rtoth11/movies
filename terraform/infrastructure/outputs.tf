@@ -23,11 +23,6 @@ output "movies_s3_bucket_name" {
   value       = aws_s3_bucket.movies_s3_bucket.bucket
 }
 
-output "pg_port" {
-  description = "The port of the PostgreSQL RDS instance."
-  value       = aws_db_instance.postgres_instance.port
-}
-
 output "alb_url" {
   description = "The URL of the Application Load Balancer for the frontend service."
   value       = try(aws_lb.movies_alb[0].dns_name, null)

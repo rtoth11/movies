@@ -95,3 +95,8 @@ variable "ec2_instance_type" {
   description = "The instance type of the EC2 instances to create"
   type        = string
 }
+
+variable "my_ip_cidr" {
+  type        = string
+  description = "Your public IP in CIDR notation (e.g. 203.0.113.42/32). It is allowed to access the PostgreSQL database."
+}

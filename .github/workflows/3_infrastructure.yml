@@ -12,10 +12,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
+      - name: Build Lambda zip with dependencies
+        working-directory: "./terraform/infrastructure"
+        run: |
+          # Install psycopg2 compiled for Amazon Linux (matches Lambda runtime)
+          pip install \
+            --platform manylinux2014_x86_64 \
+            --target ./lambda_package \
+            --implementation cp \
+            --python-version 3.12 \
+            --only-binary=:all: \
+            psycopg2-binary
+
+          cp lambda_pg_import.py ./lambda_package/
+          cd lambda_package && zip -r ../lambda_pg_import.zip . && cd ..
+          rm -rf lambda_package
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
@@ -30,7 +46,7 @@ jobs:
           echo "role_for_infrastructure_creation=$(terraform output -raw role_for_infrastructure_creation)" >> $GITHUB_OUTPUT
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ steps.tf_outputs.outputs.role_for_infrastructure_creation }}
           aws-region: us-east-1
@@ -46,4 +62,4 @@ jobs:
 
       - name: Terraform apply
         working-directory: "./terraform/infrastructure"
-        run: terraform apply -auto-approve --var "pg_database=${{ secrets.PG_DATABASE }}" --var "pg_user=${{ secrets.PG_USER }}" --var "pg_password=${{ secrets.PG_PASSWORD }}" --var "deploy_backend_and_frontend=${{ vars.DEPLOY_BACKEND_AND_FRONTEND }}"
+        run: terraform apply -auto-approve --var "pg_database=${{ secrets.PG_DATABASE }}" --var "pg_user=${{ secrets.PG_USER }}" --var "pg_password=${{ secrets.PG_PASSWORD }}" --var "my_ip_cidr=${{ secrets.MY_IP_CIDR }}" --var "deploy_backend_and_frontend=${{ vars.DEPLOY_BACKEND_AND_FRONTEND }}"

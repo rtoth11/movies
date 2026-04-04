@@ -1,10 +1,10 @@
 import argparse
 import datetime
+import json
 import logging
 import os
 
 import boto3
-import psycopg2
 from pyspark.dbutils import DBUtils
 from pyspark.sql import SparkSession
 from pyspark.sql.types import (
@@ -14,12 +14,6 @@ from pyspark.sql.types import (
 
 AWS_ACCESS_KEY_SECRET = "aws_access_key_id"
 AWS_SECRET_KEY_SECRET = "aws_secret_access_key"
-
-PG_HOST_SECRET = "pg_host"
-PG_PORT_SECRET = "pg_port"
-PG_DB_SECRET = "pg_database"
-PG_USER_SECRET = "pg_user"
-PG_PASS_SECRET = "pg_password"
 
 TEMPORARY_CSVS_VOLUME_PATH = "/Volumes/main/default/csvs_temp_volume"
 TEMPORARY_CSVS_VOLUME = "main.default.csvs_temp_volume"
@@ -39,8 +33,9 @@ def get_secret(secret_name):
     try:
         return dbutils.secrets.get(scope=args.secret_scope, key=secret_name)
     except Exception as e:
-        raise RuntimeError(f"Failed to read secret '{secret_name}' "
-                           f"from scope '{args.secret_scope}': {e}")
+        raise RuntimeError(
+            f"Failed to read secret '{secret_name}' from scope '{args.secret_scope}': {e}."
+        )
 
 
 def spark_type_to_postgres(spark_type):
@@ -51,16 +46,11 @@ def spark_type_to_postgres(spark_type):
     if isinstance(spark_type, (FloatType, DoubleType)):
         return "DOUBLE PRECISION"
     if isinstance(spark_type, DecimalType):
-        if hasattr(spark_type, "precision") and spark_type.precision is not None:
-            precision = spark_type.precision
-        else:
-            precision = 38
-        if hasattr(spark_type, "scale") and spark_type.scale is not None:
-            scale = spark_type.scale
-        else:
-            scale = 10
+        precision = spark_type.precision if getattr(spark_type, "precision", None) is not None \
+            else 38
+        scale = spark_type.scale if getattr(spark_type, "scale", None) is not None else 10
         return f"NUMERIC({precision},{scale})"
-    if isinstance(spark_type, StringType) or isinstance(spark_type, BinaryType):
+    if isinstance(spark_type, (StringType, BinaryType)):
         return "TEXT"
     if isinstance(spark_type, BooleanType):
         return "BOOLEAN"
@@ -71,23 +61,16 @@ def spark_type_to_postgres(spark_type):
     return "TEXT"
 
 
-def create_table_if_not_exists(conn, schema, table, spark_schema):
-    columns = []
-
-    for field in spark_schema.fields:
-        column_name = field.name
-        postgres_type = spark_type_to_postgres(field.dataType)
-        nullable = "" if field.nullable else "NOT NULL"
-        columns.append(f"\"{column_name}\" {postgres_type} {nullable}")
-
-    columns_sql = ",\n  ".join(columns)
-    full_table = f"\"{schema}\".\"{table}\""
-    query = f"CREATE SCHEMA IF NOT EXISTS \"{schema}\";\n" \
-            f"CREATE TABLE IF NOT EXISTS {full_table} (\n  {columns_sql}\n);"
-
-    with conn.cursor() as cursor:
-        cursor.execute(query)
-        conn.commit()
+def spark_schema_to_columns(spark_schema):
+    """Convert a Spark StructType to the column list the Lambda expects."""
+    return [
+        {
+            "name": field.name,
+            "type": spark_type_to_postgres(field.dataType),
+            "nullable": field.nullable,
+        }
+        for field in spark_schema.fields
+    ]
 
 
 def export_table_to_csvs(catalog, schema, table):
@@ -101,7 +84,6 @@ def export_table_to_csvs(catalog, schema, table):
         return None, None
 
     logging.debug(f"Writing CSV to {csvs_path}.")
-
     df.write \
         .format("csv") \
         .option("header", "true") \
@@ -111,23 +93,6 @@ def export_table_to_csvs(catalog, schema, table):
         .save(csvs_path)
 
     return csvs_path, df.schema
-
-
-def load_csvs_to_postgres(pg_conn, s3_bucket, s3_paths, schema, table):
-    full_table = f"\"{schema}\".\"{table}\""
-    with pg_conn.cursor() as cursor:
-        for s3_path in s3_paths:
-            copy_sql = f"""
-                SELECT aws_s3.table_import_from_s3(
-                   '{full_table}',
-                   '',
-                   '(format csv, header)',
-                   aws_commons.create_s3_uri('{s3_bucket}', '{s3_path}', 'us-east-1')
-                );
-            """
-            logging.debug(f"Executing COPY command for {s3_path}.")
-            cursor.execute(copy_sql)
-        pg_conn.commit()
 
 
 def delete_s3_files(s3_bucket, prefix):
@@ -163,11 +128,46 @@ def empty_volume(volume_path):
                 os.rmdir(file_path)
 
 
+def invoke_pg_import_lambda(lambda_name, target_schema, s3_bucket, region, table_specs):
+    """
+    Call the pg-import Lambda with the full list of tables to import.
+    Each entry in table_specs is {"table": str, "s3_keys": [...], "columns": [...]}.
+    The Lambda runs inside the VPC and handles all PG interaction.
+    """
+    payload = {
+        "target_schema": target_schema,
+        "s3_bucket": s3_bucket,
+        "region": region,
+        "tables": table_specs,
+        "refresh_materialized_view": True,
+    }
+
+    logging.info(f"Invoking Lambda '{lambda_name}' for {len(table_specs)} table(s).")
+    response = lambda_client.invoke(
+        FunctionName=lambda_name,
+        InvocationType="RequestResponse",   # synchronous — wait for completion
+        Payload=json.dumps(payload).encode(),
+    )
+
+    status_code = response["StatusCode"]
+    response_payload = json.loads(response["Payload"].read())
+
+    if status_code != 200 or response_payload.get("FunctionError"):
+        raise RuntimeError(
+            f"Lambda invocation failed (HTTP {status_code}): {response_payload}."
+        )
+
+    logging.info(f"Lambda response: {response_payload}.")
+    return response_payload
+
+
 def export_schema_to_postgres(source_catalog,
                               source_schema,
                               target_schema,
                               s3_bucket,
-                              s3_prefix):
+                              s3_prefix,
+                              lambda_name,
+                              region):
     prefix = s3_prefix.strip("/")
 
     tables = [
@@ -180,160 +180,54 @@ def export_schema_to_postgres(source_catalog,
 
     logging.debug(f"Found tables: {tables}.")
 
-    pg_conn = psycopg2.connect(
-        host=pg_host,
-        port=int(pg_port),
-        dbname=pg_db,
-        user=pg_user,
-        password=pg_pass
-    )
-
     empty_volume(TEMPORARY_CSVS_VOLUME_PATH)
     delete_s3_files(s3_bucket, prefix)
 
-    new_data_exists = False
+    table_specs = []
 
-    try:
-        with pg_conn.cursor() as cursor:
-            cursor.execute("CREATE EXTENSION IF NOT EXISTS aws_s3 CASCADE;")
-            cursor.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm CASCADE;")
-            pg_conn.commit()
+    for table in tables:
+        logging.info(f"Processing table: {table}.")
 
-        for table in tables:
-            logging.info(f"Processing table: {table}.")
+        local_path_to_csvs, spark_schema = export_table_to_csvs(
+            source_catalog, source_schema, table)
 
-            local_path_to_csvs, spark_schema = export_table_to_csvs(
-                source_catalog, source_schema, table)
+        if local_path_to_csvs is None:
+            logging.info(f"No new data for table '{table}', skipping.")
+            continue
 
-            if local_path_to_csvs is None:
-                logging.info(f"No new data to export for table: {table}. Skipping.")
+        s3_keys = []
+        for file_name in os.listdir(local_path_to_csvs):
+            if not file_name.endswith(".csv"):
                 continue
+            local_file_path = os.path.join(local_path_to_csvs, file_name)
+            s3_key = f"{prefix}/{table}/{file_name}"
+            logging.debug(f"Uploading {local_file_path} to s3://{s3_bucket}/{s3_key}.")
+            s3.upload_file(local_file_path, s3_bucket, s3_key)
+            s3_keys.append(s3_key)
 
-            s3_paths = []
+        for file_name in os.listdir(local_path_to_csvs):
+            os.remove(os.path.join(local_path_to_csvs, file_name))
+        os.rmdir(local_path_to_csvs)
 
-            for file_name in os.listdir(local_path_to_csvs):
-                if not file_name.endswith(".csv"):
-                    continue
-                local_file_path = os.path.join(local_path_to_csvs, file_name)
-                s3_key = f"{prefix}/{table}/{file_name}"
-                logging.debug(f"Uploading {local_file_path} to s3://{s3_bucket}/{s3_key}.")
-                s3.upload_file(local_file_path, s3_bucket, s3_key)
-                s3_paths.append(s3_key)
+        table_specs.append({
+            "table": table,
+            "s3_keys": s3_keys,
+            "columns": spark_schema_to_columns(spark_schema),
+        })
+        logging.info(f"Uploaded {len(s3_keys)} CSV(s) for table '{table}'.")
 
-            logging.debug("Ensuring Postgres table exists (best-effort mapping from Spark types).")
-            create_table_if_not_exists(pg_conn, target_schema, table, spark_schema)
-
-            load_csvs_to_postgres(pg_conn, s3_bucket, s3_paths, target_schema, table)
-
-            for file_name in os.listdir(local_path_to_csvs):
-                local_file_path = os.path.join(local_path_to_csvs, file_name)
-                os.remove(local_file_path)
-            os.rmdir(local_path_to_csvs)
-
-            new_data_exists = True
-            logging.info(f"Finished table: {table}.")
-
-        create_view_sql = f"""
-            CREATE MATERIALIZED VIEW IF NOT EXISTS "{target_schema}"."all_tables" AS
-
-            (SELECT
-                'dialogue' AS type,
-                d.id AS block_id,
-                d.movie_tmdb_id,
-                d.index_in_script,
-                d.dialogue AS content,
-                d.suffix,
-                d.parentheticals,
-                c.id AS character_id,
-                c.name AS character,
-                to_tsvector('english', d.dialogue) AS search_vector
-            FROM "{target_schema}"."gold_dialogues" d
-            JOIN "{target_schema}".gold_characters c ON d.character_id = c.id)
-            
-            UNION ALL
-            
-            (SELECT
-                'description',
-                id,
-                movie_tmdb_id,
-                index_in_script,
-                description,
-                NULL,
-                NULL,
-                NULL,
-                NULL,
-                to_tsvector('english', description)
-            FROM "{target_schema}"."gold_descriptions")
-            
-            UNION ALL
-
-            (SELECT
-                'scene',
-                id,
-                movie_tmdb_id,
-                index_in_script,
-                scene,
-                NULL,
-                NULL,
-                NULL,
-                NULL,
-                to_tsvector('english', scene)
-            FROM "{target_schema}"."gold_scenes")
-            
-            UNION ALL
-
-            (SELECT
-                'unknown',
-                id,
-                movie_tmdb_id,
-                index_in_script,
-                content,
-                NULL,
-                NULL,
-                NULL,
-                NULL,
-                to_tsvector('english', content)
-            FROM "{target_schema}"."gold_unknown_blocks");
-        """
-
-        create_movie_tmdb_index_sql = f"""
-            CREATE INDEX IF NOT EXISTS idx_all_tables_movie_tmdb_id
-            ON "{target_schema}"."all_tables" (movie_tmdb_id);
-        """
-
-        create_search_vector_index_sql = f"""
-            CREATE INDEX IF NOT EXISTS idx_all_tables_search_vector
-            ON "{target_schema}"."all_tables"
-            USING GIN(search_vector);
-        """
-
-        create_trigram_index_sql = f"""
-            CREATE INDEX IF NOT EXISTS idx_all_tables_dialogue_trigram
-            ON "{target_schema}"."all_tables"
-            USING GIN (content gin_trgm_ops);
-        """
-
-        create_unique_index_sql = f"""
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_all_tables_unique
-            ON "{target_schema}"."all_tables" (block_id);
-        """
-
-        if new_data_exists:
-            logging.info("Creating or refreshing materialized view 'all_tables'.")
-            with pg_conn.cursor() as cursor:
-                cursor.execute(create_view_sql)
-                cursor.execute(create_movie_tmdb_index_sql)
-                cursor.execute(create_search_vector_index_sql)
-                cursor.execute(create_trigram_index_sql)
-                cursor.execute(create_unique_index_sql)
-                cursor.execute(
-                    f"REFRESH MATERIALIZED VIEW CONCURRENTLY \"{target_schema}\".\"all_tables\";")
-                pg_conn.commit()
-        else:
-            logging.info("No new data was imported; skipping materialized view refresh.")
-
-    finally:
-        pg_conn.close()
+    if table_specs:
+        # Single Lambda call for all tables — the Lambda refreshes the
+        # materialized view once after all imports complete.
+        invoke_pg_import_lambda(
+            lambda_name=lambda_name,
+            target_schema=target_schema,
+            s3_bucket=s3_bucket,
+            region=region,
+            table_specs=table_specs,
+        )
+    else:
+        logging.info("No new data was found; skipping Lambda invocation.")
 
     delete_s3_files(s3_bucket, prefix)
 
@@ -346,6 +240,9 @@ if __name__ == "__main__":
     parser.add_argument("--source-schema", required=True)
     parser.add_argument("--secret-scope", required=True)
     parser.add_argument("--s3-bucket-name", required=True)
+    parser.add_argument("--lambda-name", required=True,
+                        help="Name of the pg-import Lambda function")
+    parser.add_argument("--aws-region", default="us-east-1")
 
     args = parser.parse_args()
 
@@ -355,22 +252,21 @@ if __name__ == "__main__":
     aws_access_key = get_secret(AWS_ACCESS_KEY_SECRET)
     aws_secret_key = get_secret(AWS_SECRET_KEY_SECRET)
 
-    pg_host = get_secret(PG_HOST_SECRET)
-    pg_port = get_secret(PG_PORT_SECRET)
-    pg_db = get_secret(PG_DB_SECRET)
-    pg_user = get_secret(PG_USER_SECRET)
-    pg_pass = get_secret(PG_PASS_SECRET)
-
     boto3_kwargs = {
         "aws_access_key_id": aws_access_key,
         "aws_secret_access_key": aws_secret_key,
     }
     s3 = boto3.client("s3", **boto3_kwargs)
+    lambda_client = boto3.client("lambda", **boto3_kwargs, region_name=args.aws_region)
 
-    export_schema_to_postgres(source_catalog=args.source_catalog,
-                              source_schema=args.source_schema,
-                              target_schema=args.source_schema,
-                              s3_bucket=args.s3_bucket_name,
-                              s3_prefix=S3_PREFIX)
+    export_schema_to_postgres(
+        source_catalog=args.source_catalog,
+        source_schema=args.source_schema,
+        target_schema=args.source_schema,
+        s3_bucket=args.s3_bucket_name,
+        s3_prefix=S3_PREFIX,
+        lambda_name=args.lambda_name,
+        region=args.aws_region,
+    )
 
     logging.info("All done.")

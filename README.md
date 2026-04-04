@@ -12,7 +12,7 @@ The scripts are extracted from https://www.scriptslug.com/, and the TMDB API is 
 
 # System architecture
 
-The web app is not compatible with AWS free tier, the rest of the components are compatible with it.
+Most of the resources are compatible with AWS free tier.
 
 Free edition of Databricks is sufficient.
 
@@ -25,7 +25,8 @@ added movies too. Logs are written to CloudWatch.
 
 ## Databricks
 
-We have a Databricks asset bundle with a job that transforms the uploaded data, moves the transformed data as CSV files to S3, then loads them into the Postgres db.
+We have a Databricks asset bundle with a job that transforms the uploaded data, moves the transformed data as CSV files to S3, then loads them into the Postgres db via
+a Lambda function.
 The uploaded JSON files are retained in a separate volume.
 
 ## Storage
@@ -68,8 +69,8 @@ There are multiple values we can change here, see _terraform/infrastructure/vari
 ## Github
 
 GitHub secrets required:
-- AWS_ACCESS_KEY_ID: needed to create the AWS role for infrastructure creation (admin)
-- AWS_SECRET_ACCESS_KEY: needed to create the AWS role for infrastructure creation (admin)
+- AWS_ACCESS_KEY_ID: needed to create the AWS role for infrastructure creation, and also used by Databricks so it can work with the AWS resources (admin)
+- AWS_SECRET_ACCESS_KEY: needed to create the AWS role for infrastructure creation, and also used by Databricks so it can work with the AWS resources (admin)
 - DATABRICKS_HOST: needed to upload files to Databricks
 - DATABRICKS_TOKEN: needed to authenticate with Databricks (free edition doesn't have OIDC option)
 - PG_DATABASE: PostgreSQL database name for the RDS instance
@@ -77,6 +78,7 @@ GitHub secrets required:
 - PG_USER: PostgreSQL username for the RDS instance
 - TF_API_TOKEN: needed to authenticate with HCP Terraform
 - TMDB_API_KEY: needed to authenticate with TMDB
+- MY_IP_CIDR: your public IP in CIDR notation (e.g. 203.0.113.42/32). It is allowed to access the PostgreSQL database.
 
 GitHub variables required:
 - DATABRICKS_MOVIE_DATA_VOLUME_PATH: where to upload files in Databricks (must be created manually)

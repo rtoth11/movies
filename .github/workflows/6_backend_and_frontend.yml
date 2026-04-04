@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
 
@@ -33,7 +33,6 @@ jobs:
           echo "role_for_infrastructure_update=$(terraform output -raw role_for_infrastructure_update)" >> $GITHUB_OUTPUT
           echo "backend_instance_id=$(terraform output -raw backend_instance_id)" >> $GITHUB_OUTPUT
           echo "frontend_instance_id=$(terraform output -raw frontend_instance_id)" >> $GITHUB_OUTPUT
-          echo "pg_port=$(terraform output -raw pg_port)" >> $GITHUB_OUTPUT
           echo "backend_log_group=$(terraform output -raw backend_log_group)" >> $GITHUB_OUTPUT
           echo "frontend_log_group=$(terraform output -raw frontend_log_group)" >> $GITHUB_OUTPUT
           echo "aws_region=$(terraform output -raw aws_region)" >> $GITHUB_OUTPUT
@@ -45,7 +44,7 @@ jobs:
         run: echo "FRONTEND_VERSION=$(cat app/frontend/VERSION)" >> $GITHUB_ENV
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ steps.tf_outputs.outputs.role_for_infrastructure_update }}
           aws-region: ${{ steps.tf_outputs.outputs.aws_region }}
@@ -70,10 +69,10 @@ jobs:
           echo "frontend_tags=$FRONTEND_TAGS" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build and push backend image to ECR
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./app/backend
           file: ./app/backend/Dockerfile
@@ -83,7 +82,7 @@ jobs:
           platforms: linux/amd64
 
       - name: Build and push frontend image to ECR
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./app/frontend
           file: ./app/frontend/Dockerfile
@@ -103,13 +102,14 @@ jobs:
             --query "Command.CommandId" \
             --output text \
             --parameters 'commands=[
-              "PG_HOST=$(aws ssm get-parameter --name /extraction/PG_HOST --with-decryption --query Parameter.Value --output text --region ${{ steps.tf_outputs.outputs.aws_region }}) && \
+              "PG_HOST=$(aws ssm get-parameter --name /movies/PG_HOST --with-decryption --query Parameter.Value --output text --region ${{ steps.tf_outputs.outputs.aws_region }}) && \
+              PG_PORT=$(aws ssm get-parameter --name /movies/PG_PORT --with-decryption --query Parameter.Value --output text --region ${{ steps.tf_outputs.outputs.aws_region }}) && \
               docker stop backend || true && \
               docker rm backend || true && \
               docker pull ${{ steps.tf_outputs.outputs.backend_ecr_repository_url }}:latest && \
               docker run -d --name backend --restart always -p 5000:5000 \
                 -e PG_HOST=$PG_HOST \
-                -e PG_PORT=${{ steps.tf_outputs.outputs.pg_port }} \
+                -e PG_PORT=$PG_PORT \
                 -e PG_DATABASE=${{ secrets.PG_DATABASE }} \
                 -e PG_USER=${{ secrets.PG_USER }} \
                 -e PG_PASSWORD=${{ secrets.PG_PASSWORD }} \
@@ -154,7 +154,7 @@ jobs:
 
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
-            --instance-id ${{ steps.tf_outputs.outputs.frontend_instance_id }}
+            --instance-id ${{ steps.tf_outputs.outputs.frontend_instance_id }} \
             --region $REGION || true
 
           aws ssm get-command-invocation \
