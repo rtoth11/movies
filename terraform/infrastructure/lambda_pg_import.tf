@@ -71,7 +71,7 @@ resource "aws_lambda_function" "pg_import" {
   handler          = "lambda_pg_import.handler"
   runtime          = "python3.12"
   filename         = local.lambda_zip_path
-  source_code_hash = filebase64sha256(local.lambda_zip_path)
+  source_code_hash = fileexists(local.lambda_zip_path) ? filebase64sha256(local.lambda_zip_path) : null
 
   timeout     = 900
   memory_size = 512
