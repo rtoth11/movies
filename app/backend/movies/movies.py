@@ -1,4 +1,7 @@
-from flask import Blueprint, request, jsonify
+import datetime
+import uuid
+
+from flask import Blueprint, request, jsonify, session
 
 from . import SCHEMA_NAME
 from .db import query
@@ -58,6 +61,25 @@ def search_movies():
     rows = query(sql, params)
 
     total = rows[0][4] if rows else 0
+
+    if "session_id" not in session:
+        session["session_id"] = str(uuid.uuid4())
+
+    session_id = session["session_id"]
+
+    query(
+        """
+        INSERT INTO searches (searched_at, query_text, type_filters, result_count, session_id)
+        VALUES (%s, %s, %s, %s, %s)
+        """,
+        (
+            datetime.datetime.now(),
+            q,
+            ",".join(types) if types else None,
+            total,
+            session_id
+        )
+    )
 
     return jsonify({
         "items": [

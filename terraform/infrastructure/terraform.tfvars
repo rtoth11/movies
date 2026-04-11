@@ -1,6 +1,7 @@
 extraction_ecr_repo_name = "movies-extraction-repo"
 backend_ecr_repo_name = "movies-backend-repo"
 frontend_ecr_repo_name = "movies-frontend-repo"
+pg_export_ecr_repo_name = "movies-pg-export-repo"
 github_repo = "rtoth11/movies"
 name_of_role_for_infrastructure_update = "role-for-infrastructure-update"
 path_of_role_for_infrastructure_update = "/movies/"

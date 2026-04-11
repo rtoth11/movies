@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "pg_export"
+version = "1.0.0"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+boto3 = "^1.42.88"
+pandas = "^2.3.2"
+psycopg2-binary = "^2.9.11"
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "src"
+]

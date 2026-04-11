@@ -3,10 +3,9 @@ resources:
     movies_asset_bundle_job:
       name: movies_asset_bundle_job
 
-      trigger:
-        periodic:
-          interval: 1
-          unit: DAYS
+      schedule:
+        quartz_cron_expression: "0 0 11 * * ?"
+        timezone_id: "UTC"
 
       tasks:
         - task_key: json_to_table_task
@@ -50,6 +49,46 @@ resources:
               - ${var.lambda_name}
               - --aws-region
               - ${var.aws_region}
+
+        - task_key: run_pg_export_task
+          depends_on:
+            - task_key: databricks_to_postgres_task
+          environment_key: default
+          spark_python_task:
+            python_file: "../src/run_pg_export.py"
+            parameters:
+              - --s3-bucket-name
+              - ${var.s3_bucket_name}
+              - --pg-export-s3-path
+              - ${var.pg_export_s3_path}
+              - --schema
+              - ${var.schema_name}
+              - --lambda-name
+              - ${var.pg_export_lambda_function_name}
+              - --aws-region
+              - ${var.aws_region}
+              - --secret-scope
+              - ${var.secret_scope}
+
+        - task_key: import_from_s3_task
+          depends_on:
+            - task_key: run_pg_export_task
+          environment_key: default
+          spark_python_task:
+            python_file: "../src/import_from_s3.py"
+            parameters:
+              - --s3-bucket-name
+              - ${var.s3_bucket_name}
+              - --pg-export-s3-path
+              - ${var.pg_export_s3_path}
+              - --catalog
+              - ${var.catalog_name}
+              - --bronze-schema-name
+              - ${var.bronze_schema_name}
+              - --asset-bundle-target
+              - ${bundle.target}
+              - --secret-scope
+              - ${var.secret_scope}
 
       environments:
         - environment_key: default

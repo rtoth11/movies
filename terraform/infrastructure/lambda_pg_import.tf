@@ -1,6 +1,6 @@
 resource "aws_security_group" "lambda_sg" {
-  name        = "lambda-pg-import-sg"
-  description = "Lambda pg_import egress to RDS and S3"
+  name        = "lambda-sg"
+  description = "Lambda egress to RDS and S3"
   vpc_id      = aws_vpc.movies_vpc.id
 
   egress {
@@ -11,18 +11,7 @@ resource "aws_security_group" "lambda_sg" {
   }
 
   tags = {
-    Name = "lambda-pg-import-sg"
-  }
-}
-
-data "aws_iam_policy_document" "lambda_assume_role" {
-  statement {
-    effect = "Allow"
-    principals {
-      type        = "Service"
-      identifiers = ["lambda.amazonaws.com"]
-    }
-    actions = ["sts:AssumeRole"]
+    Name = "lambda-sg"
   }
 }
 
@@ -31,29 +20,19 @@ resource "aws_iam_role" "lambda_pg_import_role" {
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 }
 
-resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
+resource "aws_iam_role_policy_attachment" "lambda_pg_import_basic_execution" {
   role       = aws_iam_role.lambda_pg_import_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
-data "aws_iam_policy_document" "lambda_ssm_policy_document" {
-  statement {
-    effect  = "Allow"
-    actions = ["ssm:GetParameter", "ssm:GetParameters"]
-    resources = [
-      "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/movies/*"
-    ]
-  }
-}
-
-resource "aws_iam_policy" "lambda_ssm_policy" {
+resource "aws_iam_policy" "lambda_pg_import_ssm_policy" {
   name   = "lambda-pg-import-ssm"
   policy = data.aws_iam_policy_document.lambda_ssm_policy_document.json
 }
 
-resource "aws_iam_role_policy_attachment" "lambda_ssm" {
+resource "aws_iam_role_policy_attachment" "lambda_pg_import_ssm" {
   role       = aws_iam_role.lambda_pg_import_role.name
-  policy_arn = aws_iam_policy.lambda_ssm_policy.arn
+  policy_arn = aws_iam_policy.lambda_pg_import_ssm_policy.arn
 }
 
 resource "aws_cloudwatch_log_group" "lambda_pg_import_log_group" {
@@ -62,7 +41,7 @@ resource "aws_cloudwatch_log_group" "lambda_pg_import_log_group" {
 }
 
 locals {
-  lambda_zip_path = "${path.module}/lambda_pg_import.zip"
+  lambda_pg_import_zip_path = "${path.module}/lambda_pg_import.zip"
 }
 
 resource "aws_lambda_function" "pg_import" {
@@ -70,8 +49,8 @@ resource "aws_lambda_function" "pg_import" {
   role             = aws_iam_role.lambda_pg_import_role.arn
   handler          = "lambda_pg_import.handler"
   runtime          = "python3.12"
-  filename         = local.lambda_zip_path
-  source_code_hash = fileexists(local.lambda_zip_path) ? filebase64sha256(local.lambda_zip_path) : null
+  filename         = local.lambda_pg_import_zip_path
+  source_code_hash = fileexists(local.lambda_pg_import_zip_path) ? filebase64sha256(local.lambda_pg_import_zip_path) : null
 
   timeout     = 900
   memory_size = 512
@@ -88,14 +67,12 @@ resource "aws_lambda_function" "pg_import" {
       PG_DB       = var.pg_database
       PG_USER     = var.pg_user
       PG_PASSWORD = var.pg_password
-      S3_BUCKET   = var.movies_s3_bucket_name
-      REGION      = var.region
     }
   }
 
   depends_on = [
     aws_cloudwatch_log_group.lambda_pg_import_log_group,
-    aws_iam_role_policy_attachment.lambda_basic_execution,
+    aws_iam_role_policy_attachment.lambda_pg_import_basic_execution,
   ]
 
   tags = {
@@ -104,8 +81,7 @@ resource "aws_lambda_function" "pg_import" {
 }
 
 resource "aws_lambda_function_event_invoke_config" "pg_import_invoke_config" {
-  function_name = aws_lambda_function.pg_import.function_name
-
+  function_name                = aws_lambda_function.pg_import.function_name
   maximum_retry_attempts       = 0
   maximum_event_age_in_seconds = 900
 }

@@ -14,7 +14,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Build Lambda zip with dependencies
+      - name: Build PG import Lambda zip with dependencies
         working-directory: "./terraform/infrastructure"
         run: |
           # Install psycopg2 compiled for Amazon Linux (matches Lambda runtime)
@@ -63,3 +63,55 @@ jobs:
       - name: Terraform apply
         working-directory: "./terraform/infrastructure"
         run: terraform apply -auto-approve --var "pg_database=${{ secrets.PG_DATABASE }}" --var "pg_user=${{ secrets.PG_USER }}" --var "pg_password=${{ secrets.PG_PASSWORD }}" --var "my_ip_cidr=${{ secrets.MY_IP_CIDR }}" --var "deploy_backend_and_frontend=${{ vars.DEPLOY_BACKEND_AND_FRONTEND }}"
+
+      - name: Read Terraform outputs
+        id: tf_outputs_infra
+        working-directory: "./terraform/infrastructure"
+        run: |
+          echo "pg_export_ecr_repository_url=$(terraform output -raw pg_export_ecr_repository_url)" >> $GITHUB_OUTPUT
+          echo "role_for_infrastructure_update=$(terraform output -raw role_for_infrastructure_update)" >> $GITHUB_OUTPUT
+          echo "pg_export_lambda_function_name=$(terraform output -raw pg_export_lambda_function_name)" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ steps.tf_outputs_infra.outputs.role_for_infrastructure_update }}
+          aws-region: us-east-1
+          mask-aws-account-id: false
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Read version from file
+        run: echo "PG_EXPORT_VERSION=$(cat pg_export/VERSION)" >> $GITHUB_ENV
+
+      - name: Set image tags
+        id: set_tags
+        run: |
+          TAGS="${{ steps.tf_outputs_infra.outputs.pg_export_ecr_repository_url }}:${PG_EXPORT_VERSION}"
+          TAGS="$TAGS,${{ steps.tf_outputs_infra.outputs.pg_export_ecr_repository_url }}:latest"
+          echo "TAGS=$TAGS" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push image to ECR
+        uses: docker/build-push-action@v7
+        with:
+          context: ./pg_export
+          file: ./pg_export/Dockerfile
+          push: true
+          tags: ${{ steps.set_tags.outputs.tags }}
+          provenance: false
+          platforms: linux/arm64
+
+      - name: Update Lambda function
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ steps.tf_outputs_infra.outputs.pg_export_lambda_function_name }} \
+            --image-uri ${{ steps.tf_outputs_infra.outputs.pg_export_ecr_repository_url }}:latest
+
+      - name: Wait for Lambda code update to finish
+        run: |
+          aws lambda wait function-updated \
+            --function-name ${{ steps.tf_outputs_infra.outputs.pg_export_lambda_function_name }}

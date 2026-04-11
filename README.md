@@ -79,6 +79,7 @@ GitHub secrets required:
 - TF_API_TOKEN: needed to authenticate with HCP Terraform
 - TMDB_API_KEY: needed to authenticate with TMDB
 - MY_IP_CIDR: your public IP in CIDR notation (e.g. 203.0.113.42/32). It is allowed to access the PostgreSQL database.
+- FLASK_SECRET_KEY: a random string used as a secret key in the Flask app (backend)
 
 GitHub variables required:
 - DATABRICKS_MOVIE_DATA_VOLUME_PATH: where to upload files in Databricks (must be created manually)
@@ -86,6 +87,7 @@ GitHub variables required:
 - DEPLOY_BACKEND_AND_FRONTEND: whether to deploy the backend and frontend services (true/false)
 - GENRES: for testing purposes only. A comma-separated list of genres that the extraction EC2 instance will gather data for (for valid values, see _extraction/src/extract\_movie\_data_).
 - NUMBER_OF_MOVIES: for testing purposes only. The number of new (currently not stored) movies to be extracted per genre.
+- PG_EXPORT_S3_PATH: the S3 path where the searches exported from the Postgres db will be stored before being loaded into Databricks
 
 ## Databricks
 

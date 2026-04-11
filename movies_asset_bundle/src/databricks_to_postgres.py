@@ -29,12 +29,12 @@ def get_spark() -> SparkSession:
         return SparkSession.builder.getOrCreate()
 
 
-def get_secret(secret_name):
+def get_secret(secret_name, secret_scope, db_utils):
     try:
-        return dbutils.secrets.get(scope=args.secret_scope, key=secret_name)
+        return db_utils.secrets.get(scope=secret_scope, key=secret_name)
     except Exception as e:
         raise RuntimeError(
-            f"Failed to read secret '{secret_name}' from scope '{args.secret_scope}': {e}."
+            f"Failed to read secret '{secret_name}' from scope '{secret_scope}': {e}."
         )
 
 
@@ -95,9 +95,9 @@ def export_table_to_csvs(catalog, schema, table):
     return csvs_path, df.schema
 
 
-def delete_s3_files(s3_bucket, prefix):
+def delete_s3_files(s3_client, s3_bucket, prefix):
     logging.debug(f"Deleting existing S3 files under prefix '{prefix}/'.")
-    paginator = s3.get_paginator("list_objects_v2")
+    paginator = s3_client.get_paginator("list_objects_v2")
     pages = paginator.paginate(Bucket=s3_bucket, Prefix=f"{prefix}/")
 
     objects_to_delete = []
@@ -110,7 +110,7 @@ def delete_s3_files(s3_bucket, prefix):
         delete_chunks = [objects_to_delete[i:i + 1000]
                          for i in range(0, len(objects_to_delete), 1000)]
         for chunk in delete_chunks:
-            s3.delete_objects(Bucket=s3_bucket, Delete={"Objects": chunk})
+            s3_client.delete_objects(Bucket=s3_bucket, Delete={"Objects": chunk})
         logging.debug(f"Deleted {len(objects_to_delete)} objects from S3.")
     else:
         logging.debug("No existing S3 files to delete.")
@@ -181,7 +181,7 @@ def export_schema_to_postgres(source_catalog,
     logging.debug(f"Found tables: {tables}.")
 
     empty_volume(TEMPORARY_CSVS_VOLUME_PATH)
-    delete_s3_files(s3_bucket, prefix)
+    delete_s3_files(s3, s3_bucket, prefix)
 
     table_specs = []
 
@@ -229,7 +229,7 @@ def export_schema_to_postgres(source_catalog,
     else:
         logging.info("No new data was found; skipping Lambda invocation.")
 
-    delete_s3_files(s3_bucket, prefix)
+    delete_s3_files(s3, s3_bucket, prefix)
 
 
 if __name__ == "__main__":
@@ -243,14 +243,13 @@ if __name__ == "__main__":
     parser.add_argument("--lambda-name", required=True,
                         help="Name of the pg-import Lambda function")
     parser.add_argument("--aws-region", default="us-east-1")
-
     args = parser.parse_args()
 
     spark = get_spark()
     dbutils = DBUtils(spark)
 
-    aws_access_key = get_secret(AWS_ACCESS_KEY_SECRET)
-    aws_secret_key = get_secret(AWS_SECRET_KEY_SECRET)
+    aws_access_key = get_secret(AWS_ACCESS_KEY_SECRET, args.secret_scope, dbutils)
+    aws_secret_key = get_secret(AWS_SECRET_KEY_SECRET, args.secret_scope, dbutils)
 
     boto3_kwargs = {
         "aws_access_key_id": aws_access_key,

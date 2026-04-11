@@ -455,6 +455,31 @@ data "aws_iam_policy_document" "second_terraform_policy_document" {
       "arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:*"
     ]
   }
+
+  statement {
+    effect = "Allow"
+
+    actions = [
+      "lambda:AddPermission",
+      "lambda:CreateFunction",
+      "lambda:DeleteFunction",
+      "lambda:GetFunction",
+      "lambda:GetPolicy",
+      "lambda:ListVersionsByFunction",
+      "lambda:RemovePermission",
+      "lambda:UpdateFunctionCode",
+      "lambda:GetFunctionEventInvokeConfig",
+      "lambda:PutFunctionEventInvokeConfig",
+      "lambda:ListFunctionEventInvokeConfigs",
+      "lambda:DeleteFunctionEventInvokeConfig",
+      "lambda:UpdateFunctionEventInvokeConfig",
+      "lambda:UpdateFunctionConfiguration"
+    ]
+
+    resources = [
+      "arn:aws:lambda:${var.region}:${data.aws_caller_identity.current.account_id}:function:*"
+    ]
+  }
 }
 
 resource "aws_iam_policy" "second_terraform_policy" {
