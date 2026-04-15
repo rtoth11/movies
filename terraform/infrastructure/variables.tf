@@ -13,6 +13,11 @@ variable frontend_ecr_repo_name {
   type        = string
 }
 
+variable pg_export_ecr_repo_name {
+  description = "Name for the ECR repository that will store the pg-export image"
+  type        = string
+}
+
 variable github_repo {
   description = "GitHub repository in the format 'owner/repo'. This can assume the role with necessary permissions to update infrastructure."
   type        = string

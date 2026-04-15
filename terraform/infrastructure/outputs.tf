@@ -52,3 +52,13 @@ output "aws_region" {
   description = "The AWS region where the infrastructure is deployed"
   value       = var.region
 }
+
+output "pg_export_ecr_repository_url" {
+  description = "The URL of the ECR repository that stores the pg-export image"
+  value       = aws_ecr_repository.pg_export_ecr_repository.repository_url
+}
+
+output "pg_export_lambda_function_name" {
+  description = "The name of the Lambda function that runs the Postgres export"
+  value       = aws_lambda_function.pg_export.function_name
+}

@@ -154,8 +154,8 @@ def _refresh_materialized_view(cursor, schema):
 
 def handler(event, context):
     target_schema = event["target_schema"]
-    s3_bucket = event.get("s3_bucket", os.environ.get("S3_BUCKET"))
-    region = event.get("region", os.environ.get("REGION", "us-east-1"))
+    s3_bucket = event.get("s3_bucket")
+    region = event.get("region")
     tables = event["tables"]
     refresh_view = event.get("refresh_materialized_view", True)
 

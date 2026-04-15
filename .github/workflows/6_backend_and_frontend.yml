@@ -113,6 +113,7 @@ jobs:
                 -e PG_DATABASE=${{ secrets.PG_DATABASE }} \
                 -e PG_USER=${{ secrets.PG_USER }} \
                 -e PG_PASSWORD=${{ secrets.PG_PASSWORD }} \
+                -e FLASK_SECRET_KEY=${{ secrets.FLASK_SECRET_KEY }} \
                 --log-driver=awslogs \
                 --log-opt awslogs-region=$REGION \
                 --log-opt awslogs-group=${{ steps.tf_outputs.outputs.backend_log_group }} \

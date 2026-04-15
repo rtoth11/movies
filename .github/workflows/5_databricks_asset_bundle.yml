@@ -30,6 +30,7 @@ jobs:
           echo "movies_s3_bucket_name=$(terraform output -raw movies_s3_bucket_name)" >> $GITHUB_OUTPUT
           echo "aws_region=$(terraform output -raw aws_region)" >> $GITHUB_OUTPUT
           echo "role_for_infrastructure_update=$(terraform output -raw role_for_infrastructure_update)" >> $GITHUB_OUTPUT
+          echo "pg_export_lambda_function_name=$(terraform output -raw pg_export_lambda_function_name)" >> $GITHUB_OUTPUT
 
       - name: Set up Databricks CLI
         uses: databricks/setup-cli@main
@@ -75,6 +76,8 @@ jobs:
           BUNDLE_VAR_s3_bucket_name: ${{ steps.tf_outputs.outputs.movies_s3_bucket_name }}
           BUNDLE_VAR_lambda_name: ${{ steps.read_lambda_name.outputs.lambda_name }}
           BUNDLE_VAR_aws_region: ${{ steps.tf_outputs.outputs.aws_region }}
+          BUNDLE_VAR_pg_export_s3_path: ${{ vars.PG_EXPORT_S3_PATH }}
+          BUNDLE_VAR_pg_export_lambda_function_name: ${{ steps.tf_outputs.outputs.pg_export_lambda_function_name }}
         working-directory: "./movies_asset_bundle"
         run: |
           databricks bundle deploy -t prod
