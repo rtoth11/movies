@@ -28,6 +28,7 @@ resources:
             project_directory: ../dbt
             profiles_directory: dbt_profiles/
             commands:
+              - "dbt deps --target=${bundle.target}"
               - "dbt run --target=${bundle.target} --vars \"{ catalog_name: '${var.catalog_name}', schema_name: '${var.schema_name}', bronze_schema_name: '${var.bronze_schema_name}' }\""
 
         - task_key: databricks_to_postgres_task
