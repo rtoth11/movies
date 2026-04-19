@@ -28,14 +28,18 @@ added movies too. Logs are written to CloudWatch.
 We have a Databricks asset bundle with a job that transforms the uploaded data, moves the transformed data as CSV files to S3, then loads them into the Postgres db via
 a Lambda function.
 The uploaded JSON files are retained in a separate volume.
+The job also triggers another Lambda function that exports the searches from the Postgres db as JSON files to S3, which are then loaded into Databricks and transformed
+via dbt models.
+These JSON files are also retained in a separate volume.
 
 ## Storage
 
-An S3 bucket is used to store the temporary CSV files that are loaded into the Postgres db.
+An S3 bucket is used to store the temporary CSV files that are loaded into the Postgres db and the JSON files exported from it.
 
 ## Web application
 
-Backend and frontend run on EC2 instances. An EC2 NAT instance is used to make the website publicly accessible. Backend gets data from the Postgres db.
+Backend and frontend run on EC2 instances. An EC2 NAT instance is used to make the website publicly accessible. Backend gets data from the Postgres db and saves
+the searches there.
 Logs are written to CloudWatch.
 
 
@@ -59,12 +63,13 @@ This role is used to create the infrastructure, and it has only those permission
 
 #### Infrastructure
 
-There are multiple values we can change here, see _terraform/infrastructure/variables.tf_ for details. The following variables are set based on GitHub repository variables (see below):
+There are multiple values we can change here, see _terraform/infrastructure/variables.tf_ for details. The following variables are set based on GitHub repository variables/secrets (see below):
 
 - pg_database
 - pg_user
 - pg_password
 - deploy_backend_and_frontend
+- my_ip_cidr
 
 ## Github
 
@@ -97,6 +102,6 @@ Default values:
 
 - catalog_name: _movies_
 - schema_name: _default_
-- bronze_schema_name: _bronze_ (the uploaded JSON files are loaded into the _bronze\_json\_movies_ table inside this schema)
+- bronze_schema_name: _bronze_ (the uploaded movie JSON files are loaded into the _bronze\_json\_movies_ table, the uploaded search JSON files are loaded into the _bronze\_searches_ table inside this schema)
 
 We can also set the schedule for the asset bundle job here. By default, it runs once a day.
