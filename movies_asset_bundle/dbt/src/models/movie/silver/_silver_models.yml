@@ -1,0 +1,111 @@
+models:
+  - name: silver_character_actor_map
+    description: "Mapping table between characters, their actors, and the movies they appear in, exploded from the raw JSON."
+    columns:
+      - name: movie_tmdb_id
+        description: "The TMDB identifier of the movie."
+        data_tests:
+          - not_null
+      - name: character_name
+        description: "The name of the character."
+        data_tests:
+          - not_null
+      - name: actor_tmdb_id
+        description: "The TMDB identifier of the actor. Defaults to -1 when the actor is unknown."
+        data_tests:
+          - not_null
+      - name: actor_name
+        description: "The name of the actor. Defaults to 'Unknown' when the actor is unknown."
+        data_tests:
+          - not_null
+      - name: inserted_at
+        description: "The timestamp when the record was inserted."
+        data_tests:
+          - not_null
+
+  - name: silver_movies
+    description: "Cleaned and deduplicated movie records sourced from the raw JSON bronze table."
+    columns:
+      - name: tmdb_id
+        description: "The TMDB identifier of the movie."
+        data_tests:
+          - not_null
+          - unique
+      - name: title
+        description: "The title of the movie."
+        data_tests:
+          - not_null
+      - name: year
+        description: "The release year of the movie."
+        data_tests:
+          - not_null
+      - name: inserted_at
+        description: "The timestamp when the record was inserted."
+        data_tests:
+          - not_null
+
+  - name: silver_script_blocks
+    description: "Individual script blocks exploded from each movie's script array, covering dialogues, descriptions, scenes, and unknown types."
+    columns:
+      - name: movie_tmdb_id
+        description: "The TMDB identifier of the movie this block belongs to."
+        data_tests:
+          - not_null
+      - name: index_in_script
+        description: "The position of this block within the movie script."
+        data_tests:
+          - not_null
+      - name: type
+        description: "The type of the script block (dialogue, empty_dialogue, description, scene, unknown)."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['dialogue', 'empty_dialogue', 'description', 'scene', 'unknown']
+      - name: content
+        description: "The raw text content of the script block."
+      - name: character
+        description: "The character speaking, populated only for dialogue blocks."
+      - name: dialogue
+        description: "The dialogue text, populated only for dialogue blocks."
+      - name: suffix
+        description: "The suffix of the dialogue, populated only for dialogue blocks."
+      - name: parentheticals
+        description: "The parentheticals of the dialogue, populated only for dialogue blocks."
+      - name: inserted_at
+        description: "The timestamp when the record was inserted."
+        data_tests:
+          - not_null
+
+  - name: silver_searches
+    description: "Cleaned search events with parsed timestamps and split type filters, sourced from bronze_searches."
+    columns:
+      - name: search_id
+        description: "The unique identifier for the search query."
+        data_tests:
+          - not_null
+          - unique
+      - name: searched_at
+        description: "The timestamp when the search was performed, converted from epoch milliseconds."
+        data_tests:
+          - not_null
+      - name: query_text
+        description: "The search query string."
+        data_tests:
+          - not_null
+      - name: type_filters
+        description: "Array of script block type filters. Defaults to all types when null in the source."
+        data_tests:
+          - not_null
+      - name: result_count
+        description: "The number of search results returned."
+        data_tests:
+          - not_null
+      - name: session_id
+        description: "The session identifier of the user who performed the search."
+        data_tests:
+          - not_null
+      - name: created_at
+        description: "The timestamp when the search record was created, converted from epoch milliseconds."
+        data_tests:
+          - not_null

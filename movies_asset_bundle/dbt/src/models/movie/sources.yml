@@ -8,29 +8,53 @@ sources:
         columns:
           - name: tmdb_id
             description: "The unique identifier for the movie in the TMDB database."
+            data_tests:
+              - not_null
+              - unique
           - name: title
             description: "The title of the movie."
+            data_tests:
+              - not_null
           - name: year
             description: "The release year of the movie."
+            data_tests:
+              - not_null
           - name: script
             description: "The script of the movie given as a list of script blocks."
+            data_tests:
+              - not_null
           - name: character_to_actor
             description: "The mapping between the characters and actors of the movie."
+            data_tests:
+              - not_null
 
       - name: bronze_searches
         description: "This table contains the raw data of movie searches made in the web application."
         columns:
           - name: search_id
             description: "The unique identifier for the search query."
+            data_tests:
+              - not_null
+              - unique
           - name: searched_at
             description: "The timestamp when the search was performed."
+            data_tests:
+              - not_null
           - name: query_text
             description: "The search query string used to find movies."
+            data_tests:
+              - not_null
           - name: type_filters
             description: "The script block type filters applied to the search query. When null, it indicates that no type filters were applied."
           - name: result_count
             description: "The number of search results returned for the query."
+            data_tests:
+              - not_null
           - name: session_id
             description: "The unique identifier for the user session during which the search was performed."
+            data_tests:
+              - not_null
           - name: created_at
             description: "The timestamp when the search record was created in the database."
+            data_tests:
+              - not_null

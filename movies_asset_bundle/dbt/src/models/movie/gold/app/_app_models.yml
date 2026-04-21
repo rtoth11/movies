@@ -1,0 +1,150 @@
+models:
+  - name: gold_actors
+    description: "Application-facing table of distinct actors, including an insertion timestamp."
+    columns:
+      - name: tmdb_id
+        description: "The TMDB identifier of the actor. The value -1 is a sentinel representing an unknown actor when no matching actor could be found for a character."
+        data_tests:
+          - not_null
+          - unique
+      - name: name
+        description: "The name of the actor."
+        data_tests:
+          - not_null
+      - name: inserted_at
+        description: "The timestamp when the record was inserted."
+        data_tests:
+          - not_null
+
+  - name: gold_characters
+    description: "Application-facing table of characters, linked to their actor and movie."
+    columns:
+      - name: id
+        description: "Surrogate key generated from character name, actor TMDB ID, and movie TMDB ID."
+        data_tests:
+          - not_null
+          - unique
+      - name: name
+        description: "The name of the character."
+        data_tests:
+          - not_null
+      - name: actor_tmdb_id
+        description: "The TMDB identifier of the actor playing this character."
+        data_tests:
+          - not_null
+      - name: movie_tmdb_id
+        description: "The TMDB identifier of the movie this character appears in."
+        data_tests:
+          - not_null
+      - name: inserted_at
+        description: "The timestamp when the record was inserted."
+        data_tests:
+          - not_null
+
+  - name: gold_descriptions
+    description: "Application-facing table of description script blocks."
+    columns:
+      - name: id
+        description: "Surrogate key generated from movie TMDB ID and index in script."
+        data_tests:
+          - not_null
+          - unique
+      - name: index_in_script
+        description: "The position of this description block within the movie script."
+        data_tests:
+          - not_null
+      - name: description
+        description: "The text content of the description block."
+        data_tests:
+          - not_null
+      - name: movie_tmdb_id
+        description: "The TMDB identifier of the movie this description belongs to."
+        data_tests:
+          - not_null
+      - name: inserted_at
+        description: "The timestamp when the record was inserted."
+        data_tests:
+          - not_null
+
+  - name: gold_dialogues
+    description: "Application-facing table of dialogue script blocks, linked to their character."
+    columns:
+      - name: id
+        description: "Surrogate key generated from movie TMDB ID and index in script."
+        data_tests:
+          - not_null
+          - unique
+      - name: index_in_script
+        description: "The position of this dialogue block within the movie script."
+        data_tests:
+          - not_null
+      - name: dialogue
+        description: "The dialogue text."
+        data_tests:
+          - not_null
+      - name: suffix
+        description: "The suffix of the dialogue, if any."
+      - name: parentheticals
+        description: "The parentheticals of the dialogue, if any."
+      - name: movie_tmdb_id
+        description: "The TMDB identifier of the movie this dialogue belongs to."
+        data_tests:
+          - not_null
+      - name: character_id
+        description: "Surrogate key of the character speaking this dialogue."
+        data_tests:
+          - not_null
+      - name: inserted_at
+        description: "The timestamp when the record was inserted."
+        data_tests:
+          - not_null
+
+  - name: gold_scenes
+    description: "Application-facing table of scene header script blocks."
+    columns:
+      - name: id
+        description: "Surrogate key generated from movie TMDB ID and index in script."
+        data_tests:
+          - not_null
+          - unique
+      - name: index_in_script
+        description: "The position of this scene block within the movie script."
+        data_tests:
+          - not_null
+      - name: scene
+        description: "The text content of the scene header."
+        data_tests:
+          - not_null
+      - name: movie_tmdb_id
+        description: "The TMDB identifier of the movie this scene belongs to."
+        data_tests:
+          - not_null
+      - name: inserted_at
+        description: "The timestamp when the record was inserted."
+        data_tests:
+          - not_null
+
+  - name: gold_unknown_blocks
+    description: "Application-facing table of script blocks with an unrecognised type."
+    columns:
+      - name: id
+        description: "Surrogate key generated from movie TMDB ID and index in script."
+        data_tests:
+          - not_null
+          - unique
+      - name: index_in_script
+        description: "The position of this block within the movie script."
+        data_tests:
+          - not_null
+      - name: content
+        description: "The raw text content of the unknown block."
+        data_tests:
+          - not_null
+      - name: movie_tmdb_id
+        description: "The TMDB identifier of the movie this block belongs to."
+        data_tests:
+          - not_null
+      - name: inserted_at
+        description: "The timestamp when the record was inserted."
+        data_tests:
+          - not_null
